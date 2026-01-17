@@ -3,3 +3,7 @@ pandas
 plotly
 sqlite3
 reportlab
+streamlit
+pandas
+plotly==5.18.0
+reportlab
