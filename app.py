@@ -1960,8 +1960,7 @@ def dashboard_overview_tab(age_category):
             """,
             unsafe_allow_html=True
         )
-
-    if st.button(
+         if st.button(
             "✓ Take Now",
             key=f"take_due_{med['id']}_{med['time']}",
             use_container_width=True
@@ -3079,6 +3078,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
