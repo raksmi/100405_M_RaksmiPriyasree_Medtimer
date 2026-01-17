@@ -260,7 +260,7 @@ def categorize_medications_by_status():
         
         if med.get('reminder_times'):
             for time_slot in med['reminder_times']:
-                if time_slot < current_time and not med.get('taken_today', False):
+                if time_slot < current_time and time_slot not in med.get('taken_times', []):
                     if not any(m['id'] == med['id'] and m['time'] == time_slot for m in missed):
                         missed.append({
                             'id': med['id'],
@@ -269,7 +269,8 @@ def categorize_medications_by_status():
                             'dosageAmount': med['dosageAmount'],
                             'color': med.get('color', 'blue')
                         })
-                elif time_slot > current_time and not med.get('taken_today', False):
+                elif time_slot > current_time and time_slot not in med.get('taken_times', []):
+
                     if not any(m['id'] == med['id'] and m['time'] == time_slot for m in upcoming):
                         upcoming.append({
                             'id': med['id'],
@@ -447,8 +448,14 @@ def calculate_adherence(medications):
     """Calculate medication adherence percentage"""
     if not medications:
         return 0
-    taken = sum(1 for med in medications if med.get('taken_today', False))
-    total = len(medications)
+        total_doses = 0
+        taken_doses = 0
+    for med in medications:
+        times = med.get('reminder_times', [med.get('time')])
+        total_doses += len(times)
+        taken_doses += len(med.get('taken_times', []))
+        adherence = (taken_doses / total_doses * 100) if total_doses > 0 else 0
+
     return (taken / total * 100) if total > 0 else 0
 
 def get_mascot_image(mood):
@@ -685,6 +692,8 @@ def load_user_data(username):
                 'color': med[7],
                 'instructions': med[8],
                 'taken_today': bool(med[9]),
+                'taken_times': []
+
                 'created_at': med[10]
             })
         
@@ -1713,6 +1722,7 @@ def patient_signup_page():
                         'time': reminder_times_input[0] if reminder_times_input else '09:00',
                         'color': color.lower(),
                         'taken_today': False
+                        'taken_times': []
                     }
                     
                     if len(reminder_times_input) > 1:
@@ -1948,7 +1958,22 @@ def dashboard_overview_tab(age_category):
             if st.button("✓ Take Now", key=f"take_due_{med['id']}", use_container_width=True):
                 for m in st.session_state.medications:
                     if m['id'] == med['id']:
-                        m['taken_today'] = True
+                    dose_time = med['time']
+                    for m in st.session_state.medications:
+                    if m['id'] == med['id']:
+                    if dose_time not in m.get('taken_times', []):
+            m['taken_times'].append(dose_time)
+
+        # OPTIONAL: mark fully taken only if ALL doses are done
+        all_times = m.get('reminder_times', [m.get('time')])
+        if set(m['taken_times']) == set(all_times):
+            m['taken_today'] = True
+
+        update_medication_history(m['id'], 'taken')
+        update_adherence_history()
+        st.success(f"{m['name']} at {dose_time} marked as taken!")
+        st.rerun()
+
                         update_medication_history(m['id'], 'taken')
                         update_adherence_history()
                         save_user_data()
@@ -3051,5 +3076,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
