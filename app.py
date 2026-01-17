@@ -1863,7 +1863,9 @@ def dashboard_overview_tab(age_category):
     st.markdown("<h3 style='color: #ffffff;'>📊 Your Health Overview</h3>", unsafe_allow_html=True)
     
     
-    missed, upcoming, taken = categorize_medications_by_status()
+    missed, upcoming, taken = categorize_medications_by_status(st.session_state.medications)
+    due_meds = check_due_medications(st.session_state.medications)
+
     
     col1, col2, col3, col4 = st.columns(4)
     
@@ -3079,6 +3081,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
