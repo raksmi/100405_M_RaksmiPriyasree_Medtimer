@@ -2241,7 +2241,7 @@ def medications_tab():
                         time_label = "Medication Time"
                     elif len(default_times) == 2:
                         time_label = ["Morning Time", "Evening Time"][i]
-                    else len(default_times) == 3:
+                    elif len(default_times) == 3:
                         time_label = ["Morning Time", "Afternoon Time", "Evening Time"][i]
                     
                     time_input = st.time_input(time_label, value=datetime.strptime(default_time, "%H:%M").time(), key=f"new_time_{i}")
@@ -3074,6 +3074,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
