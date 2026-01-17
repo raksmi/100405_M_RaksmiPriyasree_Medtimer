@@ -1949,8 +1949,8 @@ def dashboard_overview_tab(age_category):
     if due_meds:
         if st.session_state.sound_enabled:
             play_reminder_sound()
-    for med in due_meds:
-        st.markdown(
+        for med in due_meds:
+    st.markdown(
         f"""
         <div class='reminder-item'>
             <strong>🔔 REMINDER NOW:</strong>
@@ -1972,15 +1972,17 @@ def dashboard_overview_tab(age_category):
                 if dose_time not in m.get('taken_times', []):
                     m['taken_times'].append(dose_time)
 
-                # OPTIONAL: mark fully taken if all doses done
                 all_times = m.get('reminder_times', [m.get('time')])
                 if set(m['taken_times']) == set(all_times):
                     m['taken_today'] = True
 
                 update_medication_history(m['id'], 'taken')
                 update_adherence_history()
-                st.success(f"{m['name']} at {format_time(dose_time)} marked as taken!")
+                st.success(
+                    f"{m['name']} at {format_time(dose_time)} marked as taken!"
+                )
                 st.rerun()
+
 
         
 
@@ -3092,6 +3094,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
