@@ -1957,7 +1957,7 @@ def dashboard_overview_tab(age_category):
             
             if st.button("✓ Take Now", key=f"take_due_{med['id']}", use_container_width=True):
                 for m in st.session_state.medications:
-                    if m['id'] == med['id']:
+                if m['id'] == med['id']:
                     dose_time = med['time']
                     for m in st.session_state.medications:
                     if m['id'] == med['id']:
@@ -3076,6 +3076,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
