@@ -1721,7 +1721,7 @@ def patient_signup_page():
                         'frequency': frequency.lower().replace(' ', '-'),
                         'time': reminder_times_input[0] if reminder_times_input else '09:00',
                         'color': color.lower(),
-                        'taken_today': False
+                        'taken_today': False,
                         'taken_times': []
                     }
                     
@@ -3076,6 +3076,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
