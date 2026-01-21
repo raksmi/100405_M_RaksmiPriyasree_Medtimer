@@ -1918,7 +1918,8 @@ def dashboard_overview_tab(age_category):
         
         for med in due_meds:
             dose_time = med.get('time', '00:00')
-            med_key = f"due_{med['id']}_{dose_time.replace(':', '')}"
+            med_key = f"take_{med['id']}_{dose_time}_{'missed' if is_missed else 'upcoming'}"
+
             
             st.markdown(
                 f"""
@@ -2935,6 +2936,7 @@ def main():
 
 if __name__ == "__main__":
     main()s
+
 
 
 
