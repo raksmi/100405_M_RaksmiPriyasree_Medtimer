@@ -12,10 +12,8 @@
 -   [👥 User Types](#-user-types)
 -   [🎨 Customization](#-customization)
 -   [📊 Analytics](#-analytics)
--   [🔒 Security](#-security)
--   [🐛 Troubleshooting](#-troubleshooting)
--   [🤝 Contributing](#-contributing)
--   [📄 License](#-license)
+-   [🔒 Credits](#-credits)
+
 
 * * *
 
@@ -570,6 +568,8 @@ Adherence % = (Total Doses Taken / Total Doses Scheduled) × 100
 -   **Color Options**: 8
 
 * * *
+
+## 🎯 Credits
 
 **Made with ❤️ for better health management**
 
