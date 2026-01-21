@@ -2327,7 +2327,7 @@ def appointments_tab():
             
             with col3:
                 st.session_state.button_counter += 1
-                if st.button("🗑️", key=f"delete_appt_{appt['id']}_{st.session_state.button_counter}", help="Cancel"):
+                if st.button("🗑️", key=f"delete_med_{med['id']}", help="Delete"):
                     st.session_state.appointments = [a for a in st.session_state.appointments if a['id'] != appt['id']]
                     save_user_data()
                     st.rerun()
@@ -2457,7 +2457,7 @@ def side_effects_tab():
             
             with col3:
                 st.session_state.button_counter += 1
-                if st.button("🗑️", key=f"delete_effect_{effect['id']}_{st.session_state.button_counter}", help="Remove"):
+                if st.button("🗑️", key=f"delete_med_{med['id']}", help="Delete"):
                     st.session_state.side_effects = [e for e in st.session_state.side_effects if e['id'] != effect['id']]
                     save_user_data()
                     st.rerun()
@@ -2935,5 +2935,6 @@ def main():
 
 if __name__ == "__main__":
     main()s
+
 
 
