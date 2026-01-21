@@ -1592,7 +1592,7 @@ def patient_signup_page():
             disease_notes = st.text_area("Notes (optional)", key="disease_notes_input")
             
             st.session_state.button_counter += 1
-            if st.button("➕ Add Disease", key=f"add_disease_{st.session_state.button_counter}"):
+            if st.button("➕ Add Disease", key=f"add_disease_step3"):
                 if disease_name:
                     st.session_state.signup_data['diseases'].append({
                         'id': str(len(st.session_state.signup_data['diseases']) + 1),
@@ -2209,12 +2209,12 @@ def medications_tab():
             
             with col3:
                 st.session_state.button_counter += 1
-                if st.button("✏️", key=f"edit_{med['id']}_{st.session_state.button_counter}", help="Edit"):
+                if st.button("✏️", key=f"edit_med_{med['id']}", help="Edit"):
                     st.session_state.editing_medication = med
                     st.rerun()
                 
                 st.session_state.button_counter += 1
-                if st.button("🗑️", key=f"delete_{med['id']}_{st.session_state.button_counter}", help="Delete"):
+                if st.button("🗑️", key=f"delete_med_{med['id']}", help="Delete"):
                     st.session_state.medications = [m for m in st.session_state.medications if m['id'] != med['id']]
                     save_user_data()
                     st.rerun()
@@ -2935,4 +2935,5 @@ def main():
 
 if __name__ == "__main__":
     main()s
+
 
