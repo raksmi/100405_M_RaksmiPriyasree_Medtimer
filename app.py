@@ -542,6 +542,8 @@ def initialize_session_state():
         st.session_state.last_reminder_check = datetime.now()
     if 'button_counter' not in st.session_state:
         st.session_state.button_counter = 0
+    if 'undo_stack' not in st.session_state:
+        st.session_state.undo_stack = []
 
 def save_user_data():
     """Save user data to SQLite database"""
@@ -774,6 +776,28 @@ def update_adherence_history():
     conn.commit()
     conn.close()
 
+def save_state_to_undo_stack(action_type="medication_change"):
+    """Save current state to undo stack"""
+    if len(st.session_state.undo_stack) >= 10:
+        st.session_state.undo_stack.pop(0)
+    
+    state_snapshot = {
+        'action_type': action_type,
+        'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        'medications': [med.copy() for med in st.session_state.medications]
+    }
+    st.session_state.undo_stack.append(state_snapshot)
+
+def undo_last_action():
+    """Undo the last action"""
+    if not st.session_state.undo_stack:
+        return False
+    
+    previous_state = st.session_state.undo_stack.pop()
+    st.session_state.medications = previous_state['medications']
+    save_user_data()
+    return True
+
 def clear_session_data():
     """Clear all session data (logout)"""
     st.session_state.user_profile = None
@@ -788,6 +812,7 @@ def clear_session_data():
     st.session_state.signup_step = 1
     st.session_state.signup_data = {}
     st.session_state.editing_medication = None
+    st.session_state.undo_stack = []
 
 def inject_custom_css(age_category='adult'):
     """Inject custom CSS into Streamlit app with age-based styling"""
@@ -951,6 +976,55 @@ def inject_custom_css(age_category='adult'):
         font-weight: 700;
         display: inline-block;
         box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+    }}
+    
+    .checklist-item {{
+        background: white;
+        border-radius: 12px;
+        padding: 16px 20px;
+        margin: 8px 0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        transition: all 0.3s ease;
+        border-left: 5px solid #ccc;
+    }}
+    
+    .checklist-item.taken {{
+        border-left-color: #10b981;
+        background: linear-gradient(to right, #ecfdf5, white);
+    }}
+    
+    .checklist-item.missed {{
+        border-left-color: #ef4444;
+        background: linear-gradient(to right, #fef2f2, white);
+    }}
+    
+    .checklist-item.upcoming {{
+        border-left-color: #f59e0b;
+        background: linear-gradient(to right, #fffbeb, white);
+    }}
+    
+    .checklist-checkbox {{
+        width: 24px;
+        height: 24px;
+        border: 3px solid;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }}
+    
+    .checklist-checkbox.checked {{
+        background-color: #10b981;
+        border-color: #10b981;
+    }}
+    
+    .checklist-checkbox.missed {{
+        background-color: #ef4444;
+        border-color: #ef4444;
+    }}
+    
+    .checklist-checkbox.upcoming {{
+        background-color: #f59e0b;
+        border-color: #f59e0b;
     }}
     
     .stTextInput > div > div > input,
@@ -1908,13 +1982,94 @@ def dashboard_overview_tab(age_category):
             st.session_state.sound_enabled = not st.session_state.sound_enabled
             st.rerun()
     
-    # Today's medication schedule
-    st.markdown("<h3 style='color: #ffffff; margin-top: 20px;'> 📋 Today's Medication Schedule</h3>", unsafe_allow_html=True)
+    # Undo button (NEW FEATURE)
+    if st.session_state.undo_stack:
+        col_undo_left, col_undo_right = st.columns([8, 1])
+        with col_undo_right:
+            if st.button("↩️ Undo", key="undo_btn", use_container_width=True, help=f"Undo last action (Stack: {len(st.session_state.undo_stack)})"):
+                if undo_last_action():
+                    st.success("Undo successful!")
+                    st.rerun()
+                else:
+                    st.error("Nothing to undo")
+    
+    # TODAY'S MEDICATION CHECKLIST (NEW FEATURE)
+    st.markdown("<h3 style='color: #ffffff; margin-top: 30px;'>✅ Today's Medication Checklist</h3>", unsafe_allow_html=True)
+    
+    # Display checklist with color-coded columns
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown(f"<h4 style='color: #10b981;'>🟢 TAKEN ({len(taken)})</h4>", unsafe_allow_html=True)
+        if taken:
+            for med in taken:
+                st.markdown(f"""
+                <div class='checklist-item taken'>
+                    <div style='display: flex; align-items: center; gap: 12px;'>
+                        <div class='checklist-checkbox checked'></div>
+                        <div>
+                            <strong>{med['name']}</strong><br>
+                            <small>{med['dosageAmount']} | {format_time(med.get('reminder_times', [med['time']])[0]) if med.get('reminder_times') else format_time(med['time'])}</small>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("No medications taken yet today.")
+    
+    with col2:
+        st.markdown(f"<h4 style='color: #f59e0b;'>🟡 UPCOMING ({len(upcoming)})</h4>", unsafe_allow_html=True)
+        if upcoming:
+            for med in upcoming:
+                med_time = datetime.strptime(med['time'], "%H:%M")
+                now = datetime.now()
+                time_diff = (med_time - now).total_seconds() / 60
+                
+                # Take button for upcoming medications
+                take_key = f"take_upcoming_{med['id']}_{med['time']}"
+                
+                st.markdown(f"""
+                <div class='checklist-item upcoming'>
+                    <div style='display: flex; align-items: center; gap: 12px;'>
+                        <div class='checklist-checkbox upcoming'></div>
+                        <div style='flex: 1;'>
+                            <strong>{med['name']}</strong><br>
+                            <small>{med['dosageAmount']} | {format_time(med['time'])}</small>
+                        </div>
+                        <div>
+                            <small style='color: #f59e0b; font-weight: 700;'>In {int(time_diff)} min</small>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("No upcoming medications.")
+    
+    with col3:
+        st.markdown(f"<h4 style='color: #ef4444;'>🔴 MISSED ({len(missed)})</h4>", unsafe_allow_html=True)
+        if missed:
+            for med in missed:
+                # Take now button for missed medications
+                take_key = f"take_missed_{med['id']}_{med['time']}"
+                
+                st.markdown(f"""
+                <div class='checklist-item missed'>
+                    <div style='display: flex; align-items: center; gap: 12px;'>
+                        <div class='checklist-checkbox missed'></div>
+                        <div style='flex: 1;'>
+                            <strong>{med['name']}</strong><br>
+                            <small>{med['dosageAmount']} | {format_time(med['time'])}</small>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.success("No missed medications! Great job! 🎉")
+    
+    # Due medications section with Take buttons
+    st.markdown("<br>", unsafe_allow_html=True)
     
     if due_meds:
-        if st.session_state.sound_enabled:
-            play_reminder_sound()
-        
         st.markdown(f"<h4 style='color: #ffffff;'>⚠️ Due Now</h4>", unsafe_allow_html=True)
         
         for med in due_meds:
@@ -1932,26 +2087,35 @@ def dashboard_overview_tab(age_category):
                 unsafe_allow_html=True
             )
             
-            if st.button("✓ Take Now", key=f"take_{med['id']}_{med['time']}_due", use_container_width=True):
-                for m in st.session_state.medications:
-                    if m['id'] == med['id']:
-                        if dose_time not in m.get('taken_times', []):
-                            m['taken_times'].append(dose_time)
-                        # Mark medicine fully taken only if all doses done
-                        all_times = m.get('reminder_times', [m.get('time')])
-                        if set(m['taken_times']) == set(all_times):
-                            m['taken_today'] = True
-                        update_medication_history(med['id'], 'taken')
-                        update_adherence_history()
-                        save_user_data()
-                        st.rerun()
-                        break
+            col_take, col_skip = st.columns([2, 1])
+            with col_take:
+                if st.button("✓ Take Now", key=f"take_{med['id']}_{med['time']}_due", use_container_width=True, type="primary"):
+                    save_state_to_undo_stack("take_medication")
+                    for m in st.session_state.medications:
+                        if m['id'] == med['id']:
+                            if dose_time not in m.get('taken_times', []):
+                                m['taken_times'].append(dose_time)
+                            all_times = m.get('reminder_times', [m.get('time')])
+                            if set(m['taken_times']) == set(all_times):
+                                m['taken_today'] = True
+                            update_medication_history(med['id'], 'taken')
+                            update_adherence_history()
+                            save_user_data()
+                            st.success(f"✓ {med['name']} marked as taken!")
+                            st.rerun()
+                            break
+            
+            with col_skip:
+                if st.button("⏭️ Skip", key=f"skip_{med['id']}_{med['time']}_due", use_container_width=True):
+                    save_state_to_undo_stack("skip_medication")
+                    st.info(f"⏭️ Skipped {med['name']}")
+                    st.rerun()
     else:
         st.info("🎉 No medications due right now!")
     
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # Upcoming medications
+    # Upcoming medications with Take buttons
     st.markdown("<h4 style='color: #ffffff;'>📅 Upcoming Reminders (Next 30 minutes)</h4>", unsafe_allow_html=True)
     upcoming_count = 0
     
@@ -1966,12 +2130,30 @@ def dashboard_overview_tab(age_category):
                 <strong>🔔 In {int(time_diff)} minutes:</strong> {med['name']} ({med['dosageAmount']}) at {format_time(med['time'])}
             </div>
             """, unsafe_allow_html=True)
+            
+            # Take early button
+            if st.button("📌 Take Early", key=f"take_early_{med['id']}_{med['time']}", help="Mark as taken now"):
+                save_state_to_undo_stack("take_early")
+                for m in st.session_state.medications:
+                    if m['id'] == med['id']:
+                        if med['time'] not in m.get('taken_times', []):
+                            m['taken_times'].append(med['time'])
+                        all_times = m.get('reminder_times', [m.get('time')])
+                        if set(m['taken_times']) == set(all_times):
+                            m['taken_today'] = True
+                        update_medication_history(med['id'], 'taken')
+                        update_adherence_history()
+                        save_user_data()
+                        st.success(f"✓ {med['name']} marked as taken early!")
+                        st.rerun()
+                        break
+            
             upcoming_count += 1
     
     if upcoming_count == 0:
         st.info("No upcoming medications in the next 30 minutes.")
     
-    # Missed medications section
+    # Missed medications section with Take buttons
     if missed:
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown("<h4 style='color: #ffffff;'>⚠️ Missed Medications</h4>", unsafe_allow_html=True)
@@ -1982,6 +2164,23 @@ def dashboard_overview_tab(age_category):
                 <br><small>Scheduled for: {format_time(med['time'])}</small>
             </div>
             """, unsafe_allow_html=True)
+            
+            # Take missed button
+            if st.button("📌 Take Now (Late)", key=f"take_late_{med['id']}_{med['time']}", help="Mark as taken now"):
+                save_state_to_undo_stack("take_late")
+                for m in st.session_state.medications:
+                    if m['id'] == med['id']:
+                        if med['time'] not in m.get('taken_times', []):
+                            m['taken_times'].append(med['time'])
+                        all_times = m.get('reminder_times', [m.get('time')])
+                        if set(m['taken_times']) == set(all_times):
+                            m['taken_today'] = True
+                        update_medication_history(med['id'], 'taken_late')
+                        update_adherence_history()
+                        save_user_data()
+                        st.success(f"✓ {med['name']} marked as taken!")
+                        st.rerun()
+                        break
 
 def analytics_tab(age_category):
     """Analytics tab with comprehensive graphs"""
@@ -2066,6 +2265,7 @@ def medications_tab():
             col_submit, col_cancel = st.columns(2)
             with col_submit:
                 if st.form_submit_button("💾 Save Changes", use_container_width=True):
+                    save_state_to_undo_stack("edit_medication")
                     for med in st.session_state.medications:
                         if med['id'] == med_to_edit['id']:
                             med['name'] = edit_name
@@ -2130,6 +2330,7 @@ def medications_tab():
         
         if st.button("Add Medication", key="add_med_btn", use_container_width=True):
             if new_med_name and new_dosage_amount:
+                save_state_to_undo_stack("add_medication")
                 new_med = {
                     'id': len(st.session_state.medications) + 1,
                     'name': new_med_name,
@@ -2217,6 +2418,7 @@ def medications_tab():
                 
                 st.session_state.button_counter += 1
                 if st.button("🗑️", key=f"delete_med_{med['id']}", help="Delete"):
+                    save_state_to_undo_stack("delete_medication")
                     st.session_state.medications = [m for m in st.session_state.medications if m['id'] != med['id']]
                     save_user_data()
                     st.rerun()
@@ -2246,6 +2448,7 @@ def appointments_tab():
         appt_notes = st.text_area("Notes (optional)", key="appt_notes", placeholder="Reason for visit, things to discuss, etc.")
         
         if st.button("Schedule Appointment", key="add_appt_btn", use_container_width=True):
+            save_state_to_undo_stack("add_appointment")
             if appt_doctor and appt_date:
                 new_appt = {
                     'id': len(st.session_state.appointments) + 1,
@@ -2329,7 +2532,8 @@ def appointments_tab():
             
             with col3:
                 st.session_state.button_counter += 1
-                if st.button("🗑️", key=f"delete_med_{med['id']}", help="Delete"):
+                if st.button("🗑️", key=f"delete_appt_{appt['id']}", help="Delete"):
+                    save_state_to_undo_stack("delete_appointment")
                     st.session_state.appointments = [a for a in st.session_state.appointments if a['id'] != appt['id']]
                     save_user_data()
                     st.rerun()
@@ -2368,6 +2572,7 @@ def side_effects_tab():
                 st.warning("⚠️ Consider consulting your doctor about this side effect.")
             
             if st.button("Report Side Effect", key="report_effect_btn", use_container_width=True):
+                save_state_to_undo_stack("report_side_effect")
                 if effect_description:
                     new_effect = {
                         'id': len(st.session_state.side_effects) + 1,
@@ -2459,7 +2664,8 @@ def side_effects_tab():
             
             with col3:
                 st.session_state.button_counter += 1
-                if st.button("🗑️", key=f"delete_med_{med['id']}", help="Delete"):
+                if st.button("🗑️", key=f"delete_effect_{effect['id']}", help="Delete"):
+                    save_state_to_undo_stack("delete_side_effect")
                     st.session_state.side_effects = [e for e in st.session_state.side_effects if e['id'] != effect['id']]
                     save_user_data()
                     st.rerun()
@@ -2937,8 +3143,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
