@@ -205,9 +205,9 @@ def get_custom_medication_times(frequency):
     return frequency_map.get(frequency, ['09:00'])
 
 def play_reminder_sound():
-    """Play reminder sound using HTML audio with better sound quality"""
+    """Play reminder sound using HTML audio"""
     audio_html = """
-    <audio id="reminderSound" autoplay loop>
+    <audio id="reminderSound" autoplay>
         <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg">
     </audio>
     <script>
@@ -216,11 +216,6 @@ def play_reminder_sound():
         audio.play().catch(function(error) {
             console.log('Audio play failed:', error);
         });
-        
-        setTimeout(function() {
-            audio.pause();
-            audio.currentTime = 0;
-        }, 10000);
     </script>
     """
     st.markdown(audio_html, unsafe_allow_html=True)
@@ -255,11 +250,6 @@ def show_100_percent_adherence_animation():
         50% { transform: scale(1.1); box-shadow: 0 0 40px rgba(16, 185, 129, 0.8); }
     }
     
-    @keyframes celebrate {
-        0%, 100% { transform: rotate(-5deg); }
-        50% { transform: rotate(5deg); }
-    }
-    
     .confetti {
         position: fixed;
         width: 10px;
@@ -268,14 +258,6 @@ def show_100_percent_adherence_animation():
         animation: confetti-fall 3s linear forwards;
         z-index: 9999;
         pointer-events: none;
-    }
-    
-    .celebration-badge {
-        animation: pulse-glow 1s ease-in-out infinite;
-    }
-    
-    .trophy-celebrate {
-        animation: celebrate 0.5s ease-in-out infinite;
     }
     </style>
     
@@ -432,9 +414,8 @@ def check_upcoming_reminders(upcoming_meds):
         time_diff = (med_time - now).total_seconds() / 60 
         
         if 0 < time_diff <= 30:
-            st.warning(f"⏰ **Upcoming Reminder:** {med['name']} ({med['dosageAmount']}) at {med['time']} - Take in {int(time_diff)} minutes!")
-            return True
-    return False
+            return True, med, int(time_diff)
+    return False, None, 0
 
 def check_due_medications(medications):
     """Check for medications that are due now and trigger reminders"""
@@ -464,6 +445,7 @@ def check_due_medications(medications):
                     if time_diff <= 5 and med not in due_medications:
                         due_medications.append(med)
                         return due_medications
+    return due_medications
 
 def calculate_adherence(medications):
     """Calculate medication adherence percentage (dose-based)"""
@@ -482,14 +464,15 @@ def calculate_adherence(medications):
 
     return (taken_doses / total_doses * 100) if total_doses > 0 else 0
 
-def get_mascot_image(mood):
-    mascot_images = {
-        'happy': '🐢',
-        'excited': '🐢',
-        'neutral': '🐢',
-        'worried': '🐢'
+def get_mascot_emoji(mood):
+    """Get emoji mascot based on mood"""
+    mascot_emojis = {
+        'happy': '🐢😊',
+        'excited': '🐢🎉',
+        'neutral': '🐢😐',
+        'worried': '🐢😟'
     }
-    return mascot_images.get(mood, '🐢')
+    return mascot_emojis.get(mood, '🐢')
 
 def get_severity_color(severity):
     """Get color for severity level"""
@@ -849,7 +832,7 @@ def clear_session_data():
     st.session_state.previous_adherence = 0
 
 def inject_custom_css(age_category='adult'):
-    """Inject custom CSS into Streamlit app with age-based styling"""
+    """Inject custom CSS into Streamlit app with age-based styling - IMPROVED TEXT VISIBILITY"""
     primary_color = get_primary_color(age_category)
     secondary_color = get_secondary_color(age_category)
     font_size = get_font_size(age_category)
@@ -872,13 +855,13 @@ def inject_custom_css(age_category='adult'):
     
     p, div, span, label {{
         font-size: {font_size} !important;
-        color: #ffffff !important;
     }}
     
     h1 {{ font-size: calc({font_size} * 2.5) !important; }}
     h2 {{ font-size: calc({font_size} * 2) !important; }}
     h3 {{ font-size: calc({font_size} * 1.5) !important; }}
     
+    /* IMPROVED: Medication Card Styling with better text visibility */
     .medication-card {{
         background: white;
         border-radius: 16px;
@@ -894,10 +877,15 @@ def inject_custom_css(age_category='adult'):
         box-shadow: 0 12px 24px rgba(0,0,0,0.15);
     }}
     
-    .medication-card p, .medication-card div, .medication-card span {{
+    .medication-card p, 
+    .medication-card div, 
+    .medication-card span,
+    .medication-card strong,
+    .medication-card small {{
         color: #1f2937 !important;
     }}
     
+    /* IMPROVED: Checklist Item Styling with better text visibility */
     .checklist-item {{
         background: white;
         border-radius: 12px;
@@ -908,7 +896,6 @@ def inject_custom_css(age_category='adult'):
         justify-content: space-between;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         transition: all 0.3s ease;
-        border-left: 4px solid #f59e0b;
     }}
     
     .checklist-item:hover {{
@@ -936,6 +923,28 @@ def inject_custom_css(age_category='adult'):
         background: linear-gradient(to right, #fffbeb, white);
     }}
     
+    /* IMPROVED: Checklist item text colors - CRITICAL FIX */
+    .checklist-item p,
+    .checklist-item div,
+    .checklist-item span,
+    .checklist-item strong,
+    .checklist-item small,
+    .checklist-item label {{
+        color: #1f2937 !important;
+        font-weight: 500 !important;
+    }}
+    
+    .checklist-item strong {{
+        color: #111827 !important;
+        font-weight: 700 !important;
+    }}
+    
+    .checklist-item small {{
+        color: #6b7280 !important;
+        font-size: 0.875em !important;
+    }}
+    
+    /* Stat Cards */
     .stat-card {{
         background: white;
         border-radius: 20px;
@@ -975,6 +984,7 @@ def inject_custom_css(age_category='adult'):
         letter-spacing: 0.5px;
     }}
     
+    /* Auth Card */
     .auth-card {{
         background: black;
         border-radius: 24px;
@@ -1027,6 +1037,7 @@ def inject_custom_css(age_category='adult'):
         transform: none !important;
     }}
     
+    /* Status Badges - IMPROVED COLOR CODING */
     .status-taken {{
         background: linear-gradient(135deg, #10b981, #059669);
         color: white !important;
@@ -1140,6 +1151,13 @@ def inject_custom_css(age_category='adult'):
         box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
     }}
     
+    .reminder-section p,
+    .reminder-section div,
+    .reminder-section span,
+    .reminder-section strong {{
+        color: #1f2937 !important;
+    }}
+    
     .reminder-item {{
         background: white;
         border-radius: 12px;
@@ -1148,6 +1166,7 @@ def inject_custom_css(age_category='adult'):
         border-left: 4px solid #f59e0b;
     }}
     
+    /* Section Headers - IMPROVED COLOR CODING */
     .section-header {{
         font-size: 24px;
         font-weight: bold;
@@ -1168,9 +1187,52 @@ def inject_custom_css(age_category='adult'):
     .section-taken {{
         background: linear-gradient(135deg, #10b981, #059669);
     }}
+    
+    /* DASHBOARD REMINDER BANNER - NEW */
+    .reminder-banner {{
+        background: linear-gradient(135deg, #fef3c7, #fde68a);
+        border: 3px solid #f59e0b;
+        border-radius: 16px;
+        padding: 20px;
+        margin: 20px 0;
+        box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+        animation: pulse 2s ease-in-out infinite;
+    }}
+    
+    @keyframes pulse {{
+        0%, 100% {{ transform: scale(1); }}
+        50% {{ transform: scale(1.02); }}
+    }}
+    
+    .reminder-banner p,
+    .reminder-banner div,
+    .reminder-banner span,
+    .reminder-banner strong {{
+        color: #92400e !important;
+    }}
+    
+    .reminder-due-banner {{
+        background: linear-gradient(135deg, #fee2e2, #fecaca);
+        border: 3px solid #ef4444;
+        border-radius: 16px;
+        padding: 20px;
+        margin: 20px 0;
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+        animation: pulse 1.5s ease-in-out infinite;
+    }}
+    
+    .reminder-due-banner p,
+    .reminder-due-banner div,
+    .reminder-due-banner span,
+    .reminder-due-banner strong {{
+        color: #991b1b !important;
+    }}
     </style>
     """
     return css
+
+# Rest of the functions remain the same as in the original code
+# ... (keeping all other helper functions identical to original)
 
 def create_adherence_line_chart(adherence_history, age_category='adult'):
     """Create line chart showing adherence over time"""
@@ -1548,6 +1610,7 @@ def generate_pdf_report(report_data, report_type="Complete Health Report"):
     buffer.seek(0)
     return buffer.getvalue()
 
+# Authentication Pages
 def account_type_selection_page():
     """Landing page for selecting account type"""
     st.markdown("<h1 style='text-align: center; margin-top: 50px; color: white;'>🏥 Welcome to MedTimer</h1>", unsafe_allow_html=True)
@@ -1787,7 +1850,7 @@ def patient_signup_page():
             med_name = st.text_input("Medication Name", key="med_name_input")
             col_a, col_b = st.columns(2)
             with col_a:
-                dosage_type = st.selectbox("Type", ["pill", "liquid", "injection", "other"], key="dosage_type_select")
+                dosage_type = st.selectbox("Type", ["Pill", "Liquid", "Injection", "Other"], key="dosage_type_select")
             with col_b:
                 dosage_amount = st.text_input("Dosage", placeholder="e.g., 500mg", key="dosage_amount_input")
             
@@ -1954,21 +2017,14 @@ def caregiver_signup_page():
         
         st.markdown("</div>", unsafe_allow_html=True)
 
-def get_mascot_text_color(mood):
-    colors = {
-        'excited': '#10b981',
-        'happy': '#22c55e',
-        'neutral': '#f59e0b',
-        'worried': '#ef4444'
-    }
-    return colors.get(mood, '#374151')
-
+# IMPROVED DASHBOARD WITH BETTER INTERFACE AND FUNCTIONALITY
 def dashboard_overview_tab(age_category):
-    """Enhanced dashboard overview with checklist, proper color coding, and separated sections"""
+    """Enhanced dashboard overview with working reminders, visible text, and proper color coding"""
     current_date, current_time = get_current_datetime_display()
     
     st.markdown("<h3 style='color: #ffffff;'>📊 Your Health Overview</h3>", unsafe_allow_html=True)
     
+    # Date/Time Display
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown(f"""
@@ -1980,6 +2036,7 @@ def dashboard_overview_tab(age_category):
     
     st.markdown("<br>", unsafe_allow_html=True)
     
+    # Statistics Cards
     missed, upcoming, taken = categorize_medications_by_status(st.session_state.medications)
     
     col1, col2, col3, col4 = st.columns(4)
@@ -2026,10 +2083,10 @@ def dashboard_overview_tab(age_category):
     
     st.markdown("<br>", unsafe_allow_html=True)
     
+    # Mascot Section with EMOJI instead of image
     time_of_day = get_time_of_day().lower().replace('👋 ', '')
     mascot_message = get_mascot_message(adherence, time_of_day)
-    mascot_color = get_mascot_text_color(st.session_state.turtle_mood)
-    mascot_img = get_mascot_image(st.session_state.turtle_mood)
+    mascot_emoji = get_mascot_emoji(st.session_state.turtle_mood)
     
     st.markdown(f"""
     <div style="
@@ -2039,13 +2096,14 @@ def dashboard_overview_tab(age_category):
         box-shadow: 0 6px 12px rgba(0,0,0,0.12);
         text-align: center;
     ">
-        <img src="{mascot_img}" width="90" style="margin-bottom:10px;">
-        <p class="mascot-message-text" style="font-size:18px;">
+        <div style="font-size: 60px; margin-bottom: 10px;">{mascot_emoji}</div>
+        <p class="mascot-message-text" style="font-size:18px; font-weight: 600;">
             {mascot_message}
         </p>
     </div>
     """, unsafe_allow_html=True)
     
+    # Sound Toggle
     col_sound_left, col_sound_right = st.columns([4, 1])
     with col_sound_right:
         if st.button("🔊" if st.session_state.sound_enabled else "🔇", use_container_width=True):
@@ -2054,11 +2112,14 @@ def dashboard_overview_tab(age_category):
     
     st.markdown("<br>", unsafe_allow_html=True)
     
+    # IMPROVED: WORKING REMINDER SYSTEM
     due_meds = check_due_medications(st.session_state.medications)
     if due_meds:
         if st.session_state.sound_enabled:
             play_reminder_sound()
-        st.markdown("<div class='section-header section-missed'>🔔 Due Now</div>", unsafe_allow_html=True)
+        st.markdown("<div class='reminder-due-banner'>", unsafe_allow_html=True)
+        st.markdown(f"<h3 style='color: #991b1b; margin-top: 0;'>🔔 MEDICATION DUE NOW!</h3>", unsafe_allow_html=True)
+        st.markdown(f"<p style='color: #991b1b;'>The following medication(s) are due:</p>", unsafe_allow_html=True)
         for med in due_meds:
             color_hex = get_medication_color_hex(med.get('color', 'blue'))
             st.markdown(f"""
@@ -2085,11 +2146,26 @@ def dashboard_overview_tab(age_category):
                             st.session_state.previous_adherence = new_adherence
                             show_100_percent_adherence_animation()
                         st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
     else:
         st.info("🎉 No medications due right now!")
     
+    # IMPROVED: UPCOMING MEDICINE REMINDER (30 minutes before)
+    has_upcoming, upcoming_med, time_to_take = check_upcoming_reminders(upcoming)
+    if has_upcoming and time_to_take > 0:
+        st.markdown("<div class='reminder-banner'>", unsafe_allow_html=True)
+        st.markdown(f"<h3 style='color: #92400e; margin-top: 0;'>⏰ Upcoming Reminder</h3>", unsafe_allow_html=True)
+        st.markdown(f"""
+        <p style='color: #92400e;'>
+            <strong>{upcoming_med['name']}</strong> ({upcoming_med['dosageAmount']}) 
+            is due in <strong>{time_to_take} minutes</strong> at {format_time(upcoming_med['time'])}
+        </p>
+        """, unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
     st.markdown("<br>", unsafe_allow_html=True)
     
+    # IMPROVED: MISSED MEDICATIONS SECTION - With visible text
     if missed:
         st.markdown("<div class='section-header section-missed'>❌ Missed Medications</div>", unsafe_allow_html=True)
         for med in missed:
@@ -2124,6 +2200,7 @@ def dashboard_overview_tab(age_category):
                             st.rerun()
         st.markdown("<br>", unsafe_allow_html=True)
     
+    # IMPROVED: UPCOMING MEDICATIONS SECTION - Now visible on dashboard
     if upcoming:
         st.markdown("<div class='section-header section-upcoming'>⏰ Upcoming Medications</div>", unsafe_allow_html=True)
         for med in upcoming:
@@ -2158,6 +2235,7 @@ def dashboard_overview_tab(age_category):
                             st.rerun()
         st.markdown("<br>", unsafe_allow_html=True)
     
+    # IMPROVED: TAKEN MEDICATIONS SECTION - With visible text
     if taken:
         st.markdown("<div class='section-header section-taken'>✅ Taken Medications</div>", unsafe_allow_html=True)
         for med in taken:
@@ -2187,6 +2265,7 @@ def dashboard_overview_tab(age_category):
                             st.rerun()
         st.markdown("<br>", unsafe_allow_html=True)
     
+    # Charts at bottom
     col1, col2 = st.columns(2)
     
     with col1:
@@ -2195,33 +2274,11 @@ def dashboard_overview_tab(age_category):
     with col2:
         st.plotly_chart(create_medication_pie_chart(st.session_state.medications, age_category), use_container_width=True)
 
-def analytics_tab(age_category):
-    """Analytics tab with comprehensive graphs"""
-    st.markdown("<h3 style='color: #ffffff;'>📊 Medication Analytics & Insights</h3>", unsafe_allow_html=True)
-    
-    st.markdown("<h4 style='color: #ffffff;'> # Adherence Trend</h4>", unsafe_allow_html=True)
-    st.plotly_chart(
-        create_adherence_line_chart(st.session_state.get('adherence_history', []), age_category),
-        use_container_width=True
-    )
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.plotly_chart(create_daily_schedule_bar_chart(st.session_state.medications, age_category), use_container_width=True)
-    
-    with col2:
-        st.plotly_chart(create_side_effects_bar_chart(st.session_state.side_effects), use_container_width=True)
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    st.markdown("<h4 style='color: #ffffff;'> # Weekly Medication Pattern</h4>", unsafe_allow_html=True)
-    st.plotly_chart(create_weekly_heatmap(st.session_state.get('medication_history', [])), use_container_width=True)
+# Keep all other tab functions unchanged from original...
+# [medications_tab, appointments_tab, side_effects_tab, achievements_tab, reports_tab, analytics_tab]
 
 def medications_tab():
-    """Medications tab content with enhanced checklist and proper color coding"""
+    """Medications tab content"""
     st.markdown("<h3 style='color: #ffffff;'>💊 Your Medications</h3>", unsafe_allow_html=True)
     
     if st.session_state.editing_medication:
@@ -2986,6 +3043,31 @@ Generated by MedTimer - Your Medication Management Companion
             
             st.success("Report generated successfully!")
 
+def analytics_tab(age_category):
+    """Analytics tab with comprehensive graphs"""
+    st.markdown("<h3 style='color: #ffffff;'>📊 Medication Analytics & Insights</h3>", unsafe_allow_html=True)
+    
+    st.markdown("<h4 style='color: #ffffff;'> # Adherence Trend</h4>", unsafe_allow_html=True)
+    st.plotly_chart(
+        create_adherence_line_chart(st.session_state.get('adherence_history', []), age_category),
+        use_container_width=True
+    )
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.plotly_chart(create_daily_schedule_bar_chart(st.session_state.medications, age_category), use_container_width=True)
+    
+    with col2:
+        st.plotly_chart(create_side_effects_bar_chart(st.session_state.side_effects), use_container_width=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    st.markdown("<h4 style='color: #ffffff;'> # Weekly Medication Pattern</h4>", unsafe_allow_html=True)
+    st.plotly_chart(create_weekly_heatmap(st.session_state.get('medication_history', [])), use_container_width=True)
+
 def patient_dashboard_page():
     """Main patient dashboard with tabs"""
     if not st.session_state.user_profile:
@@ -3005,10 +3087,10 @@ def patient_dashboard_page():
         st.markdown(f"<h2 style='color: #ffffff;'>👋 {greeting}, {st.session_state.user_profile['name']}</h2>", unsafe_allow_html=True)
     
     with col2:
-        mascot_img = get_mascot_image(st.session_state.turtle_mood)
+        mascot_emoji = get_mascot_emoji(st.session_state.turtle_mood)
         st.markdown(f"""
         <div class="turtle-container" style="text-align:center;">
-            <img src="{mascot_img}" width="120">
+            <div style="font-size: 80px;">{mascot_emoji}</div>
         </div>
         """, unsafe_allow_html=True)
     
