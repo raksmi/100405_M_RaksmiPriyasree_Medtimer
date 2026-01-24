@@ -2188,7 +2188,7 @@ def dashboard_overview_tab(age_category):
     st.markdown("<br>", unsafe_allow_html=True)
     if meds_to_show:
         for med in meds_to_show:
-    times = med.get('reminder_times', [med.get('time')])
+            times = med.get('reminder_times', [med.get('time')])
 
     for t in times:
         taken = t in med.get('taken_times', [])
@@ -3258,6 +3258,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
