@@ -542,7 +542,7 @@ def generate_patient_code():
 def initialize_session_state():
     """Initialize all session state variables"""
     if 'page' not in st.session_state:
-        st.session_state.page = 'account_type_selection'
+        st.session_state.page = 'patient_login'
     if 'user_profile' not in st.session_state:
         st.session_state.user_profile = None
     if 'medications' not in st.session_state:
@@ -1640,11 +1640,8 @@ def account_type_selection_page():
 
 def patient_login_page():
     """Patient login page"""
-    if st.button("← Back"):
-        st.session_state.page = 'account_type_selection'
-        st.rerun()
-    
-    st.markdown("<h1 style='text-align: center; margin-top: 20px; color: white;'>💊 Patient Login</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; margin-top: 50px; color: white;'>💊 Welcome to MedTimer</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; font-size: 20px; color: #fff; margin-bottom: 30px;'>Your Comprehensive Medication Management Solution</p>", unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 2, 1])
     
@@ -2200,18 +2197,39 @@ def dashboard_overview_tab(age_category):
                             st.rerun()
         st.markdown("<br>", unsafe_allow_html=True)
     
-    # IMPROVED: UPCOMING MEDICATIONS SECTION - Now visible on dashboard
+    # ENHANCED: UPCOMING MEDICATIONS SECTION - With countdown timer and checklist
     if upcoming:
         st.markdown("<div class='section-header section-upcoming'>⏰ Upcoming Medications</div>", unsafe_allow_html=True)
+        
+        now = datetime.now()
+        
         for med in upcoming:
             color_hex = get_medication_color_hex(med.get('color', 'blue'))
+            
+            # Calculate time remaining
+            med_time = med.get('time', '00:00')
+            try:
+                med_datetime = datetime.strptime(med_time, "%H:%M").replace(
+                    year=now.year, month=now.month, day=now.day
+                )
+                time_diff_minutes = int((med_datetime - now).total_seconds() / 60)
+                
+                if time_diff_minutes <= 0:
+                    time_remaining = "Due now!"
+                elif time_diff_minutes == 1:
+                    time_remaining = "in 1 minute"
+                else:
+                    time_remaining = f"in {time_diff_minutes} minutes"
+            except:
+                time_remaining = "Today"
+            
             st.markdown(f"""
-            <div class='checklist-item upcoming'>
+            <div class='checklist-item upcoming' style='border-left: 4px solid #f59e0b;'>
                 <div style='display: flex; align-items: center; flex: 1;'>
                     <div class='color-dot' style='background-color: {color_hex};'></div>
                     <div>
                         <strong>{med['name']}</strong> ({med['dosageAmount']})
-                        <br><small>⏰ Scheduled: {format_time(med.get('time', 'N/A'))}</small>
+                        <br><small>⏰ Scheduled: {format_time(med.get('time', 'N/A'))} • <span style='color: #f59e0b; font-weight: bold;'>{time_remaining}</span></small>
                     </div>
                 </div>
             </div>
@@ -3281,7 +3299,7 @@ def caregiver_dashboard_page():
             st.markdown(f"**Notes:** {profile['notes']}")
 
 def main():
-    """Main application router"""
+    """Main application router - Patient Only"""
     
     init_database()
     initialize_session_state()
@@ -3295,22 +3313,14 @@ def main():
     
     page = st.session_state.page
     
-    if page == 'account_type_selection':
-        account_type_selection_page()
-    elif page == 'patient_login':
+    if page == 'patient_login':
         patient_login_page()
     elif page == 'patient_signup':
         patient_signup_page()
     elif page == 'patient_dashboard':
         patient_dashboard_page()
-    elif page == 'caregiver_login':
-        caregiver_login_page()
-    elif page == 'caregiver_signup':
-        caregiver_signup_page()
-    elif page == 'caregiver_dashboard':
-        caregiver_dashboard_page()
     else:
-        account_type_selection_page()
+        patient_login_page()
 
 if __name__ == "__main__":
     main()
