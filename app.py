@@ -2051,14 +2051,14 @@ def dashboard_overview_tab(age_category):
             "taken": t in med.get("taken_times", [])
         }
         filtered_doses.append(dose)
-if filter_tab == "All":
-    doses_to_show = filtered_doses
-elif filter_tab == "Taken":
-    doses_to_show = [d for d in filtered_doses if d["taken"]]
-elif filter_tab == "Upcoming":
-    doses_to_show = [d for d in filtered_doses if not d["taken"]]
-else:
-    doses_to_show = []
+    if filter_tab == "All":
+        doses_to_show = filtered_doses
+    elif filter_tab == "Taken":
+        doses_to_show = [d for d in filtered_doses if d["taken"]]
+    elif filter_tab == "Upcoming":
+        doses_to_show = [d for d in filtered_doses if not d["taken"]]
+    else:
+        doses_to_show = []
 
 
 
@@ -3262,6 +3262,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
