@@ -61,7 +61,7 @@ def init_database():
                   time TEXT,
                   color TEXT,
                   instructions TEXT,
-                  taken_today INTEGER,
+                  taken_times TEXT,
                   created_at TEXT,
                   FOREIGN KEY(username) REFERENCES users(username))''')
     
@@ -450,20 +450,16 @@ def check_due_medications(medications):
     return due_medications
 
 def calculate_adherence(medications):
-    if not medications:
-        return 0
-
     total_doses = 0
     taken_doses = 0
 
     for med in medications:
         times = med.get('reminder_times', [med.get('time')])
         total_doses += len(times)
+        taken_doses += len(med.get('taken_times', []))
 
-        if med.get('taken_today', False):
-            taken_doses += len(times)
+    return round((taken_doses / total_doses) * 100, 2) if total_doses else 0
 
-    return round((taken_doses / total_doses) * 100, 2) if total_doses > 0 else 0
 
 
 def get_mascot_emoji(mood):
@@ -626,7 +622,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
     json.dumps(med.get('reminder_times', [med.get('time')])),
     med.get('color'),
     med.get('instructions', ''),
-    int(med.get('taken_today', False)),
+    json.dumps(med.get('taken_times', [])),
     med.get('created_at', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 ))
 
@@ -707,7 +703,7 @@ def load_user_data(username):
     'reminder_times': json.loads(med[7]) if med[7] else [med[6]],
     'color': med[8],
     'instructions': med[9],
-    'taken_today': bool(med[10]),
+    'taken_times': json.loads(med[8]) if med[8] else [],
     'taken_times': [],
     'created_at': med[11]
 })
@@ -2192,23 +2188,31 @@ def dashboard_overview_tab(age_category):
     st.markdown("<br>", unsafe_allow_html=True)
     if meds_to_show:
         for med in meds_to_show:
-            color_hex = get_medication_color_hex(med.get('color', 'blue'))
-            st.markdown(f"""
-        <div class='checklist-item'>
+    times = med.get('reminder_times', [med.get('time')])
+
+    for t in times:
+        taken = t in med.get('taken_times', [])
+
+        status_class = "taken" if taken else "upcoming"
+
+        st.markdown(f"""
+        <div class='checklist-item {status_class}'>
             <div style='display: flex; align-items: center; flex: 1;'>
-                <div class='color-dot' style='background-color: {color_hex};'></div>
                 <div>
                     <strong>{med['name']}</strong> ({med['dosageAmount']})
                     <br>
-                    <small>
-                        ⏰ Times: {" • ".join(med.get("reminder_times", [med.get("time")]))}
-                    </small>
+                    <small>⏰ {format_time(t)}</small>
                 </div>
             </div>
         </div>
         """, unsafe_allow_html=True)
-    else:
-        st.info("No medications in this category.")
+
+        if not taken:
+            if st.button("✓ Take", key=f"take_{med['id']}_{t}", use_container_width=True):
+                med.setdefault('taken_times', []).append(t)
+                save_user_data()
+                st.rerun()
+
 
 
     
@@ -2355,7 +2359,7 @@ def medications_tab():
                     'time': reminder_times_input[0] if reminder_times_input else '09:00',
                     'color': new_color.lower(),
                     'instructions': new_instructions,
-                    'taken_today': False,
+                    'taken_times': [],
                     'created_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 }
                 
@@ -2424,7 +2428,8 @@ def medications_tab():
                     if st.button("✓ Take", key=f"take_med_missed_{med['id']}", use_container_width=True):
                         for m in st.session_state.medications:
                             if m['id'] == med['id']:
-                                m['taken_today'] = True
+                                if t not in med['taken_times']:
+                                    med['taken_times'].append(t)
                                 update_medication_history(med['id'], 'taken')
                                 play_notification_sound()
                                 update_adherence_history()
@@ -3253,6 +3258,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
