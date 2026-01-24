@@ -420,34 +420,25 @@ def check_upcoming_reminders(upcoming_meds):
     return False, None, 0
 
 def check_due_medications(medications):
-    """Check for medications that are due now and trigger reminders"""
     now = datetime.now()
-    current_time = now.strftime("%H:%M")
-    
-    due_medications = []
+    due = []
+
     for med in medications:
-        if not med.get('taken_today', False):
-            med_time = med.get('time', '00:00')
-            
-            med_datetime = datetime.strptime(med_time, "%H:%M").replace(
+        times = med.get("reminder_times") or [med.get("time")]
+
+        for t in times:
+            if t in med.get("taken_times", []):
+                continue
+
+            med_time = datetime.strptime(t, "%H:%M").replace(
                 year=now.year, month=now.month, day=now.day
             )
-            time_diff = abs((now - med_datetime).total_seconds() / 60)
-            
-            if time_diff <= 5:
-                due_medications.append(med)
-            
-            if med.get('reminder_times'):
-                for reminder_time in med['reminder_times']:
-                    reminder_datetime = datetime.strptime(reminder_time, "%H:%M").replace(
-                        year=now.year, month=now.month, day=now.day
-                    )
-                    time_diff = abs((now - reminder_datetime).total_seconds() / 60)
-                    
-                    if time_diff <= 5 and med not in due_medications:
-                        due_medications.append(med)
-                        return due_medications
-    return due_medications
+
+            if abs((now - med_time).total_seconds()) <= 300:
+                due.append({"med": med, "time": t})
+
+    return due
+
 
 def calculate_adherence(medications):
     total_doses = 0
@@ -2050,14 +2041,26 @@ def dashboard_overview_tab(age_category):
     ["All", "Missed", "Upcoming", "Taken"],
     horizontal=True
     )
-    if filter_tab == "All":
-        meds_to_show = st.session_state.medications
-    elif filter_tab == "Missed":
-        meds_to_show = missed
-    elif filter_tab == "Upcoming":
-        meds_to_show = upcoming
-    elif filter_tab == "Taken":
-        meds_to_show = taken
+    filtered_doses = []
+    for med in st.session_state.medications:
+        times = med.get("reminder_times") or [med.get("time")]
+        for t in times:
+            dose = {
+            "med": med,
+            "time": t,
+            "taken": t in med.get("taken_times", [])
+        }
+        filtered_doses.append(dose)
+if filter_tab == "All":
+    doses_to_show = filtered_doses
+elif filter_tab == "Taken":
+    doses_to_show = [d for d in filtered_doses if d["taken"]]
+elif filter_tab == "Upcoming":
+    doses_to_show = [d for d in filtered_doses if not d["taken"]]
+else:
+    doses_to_show = []
+
+
 
 
     
@@ -2142,7 +2145,9 @@ def dashboard_overview_tab(age_category):
         st.markdown("<div class='reminder-due-banner'>", unsafe_allow_html=True)
         st.markdown(f"<h3 style='color: #991b1b; margin-top: 0;'>🔔 MEDICATION DUE NOW!</h3>", unsafe_allow_html=True)
         st.markdown(f"<p style='color: #991b1b;'>The following medication(s) are due:</p>", unsafe_allow_html=True)
-        for med in due_meds:
+        for item in due_meds:     
+            med = item["med"]     
+            t = item["time"]
             color_hex = get_medication_color_hex(med.get('color', 'blue'))
             st.markdown(f"""
             <div class='checklist-item missed'>
@@ -2186,9 +2191,8 @@ def dashboard_overview_tab(age_category):
         st.markdown("</div>", unsafe_allow_html=True)
     
     st.markdown("<br>", unsafe_allow_html=True)
-    if meds_to_show:
-        for med in meds_to_show:
-            times = med.get('reminder_times', [med.get('time')])
+    for med in meds_to_show:
+        times = med.get("reminder_times") or [med.get("time")]
 
     for t in times:
         taken = t in med.get('taken_times', [])
@@ -3258,6 +3262,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
