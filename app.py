@@ -245,7 +245,7 @@ def play_notification_sound():
     """
     st.markdown(audio_html, unsafe_allow_html=True)
 
-def categorize_medications_by_status(medications):
+def categorize_medications_by_status():
     """Categorize medications into missed, upcoming, and taken"""
     now = datetime.now()
     current_time = now.strftime("%H:%M")
@@ -254,30 +254,31 @@ def categorize_medications_by_status(medications):
     upcoming = []
     taken = []
     
-    for med in medications:
+    for med in st.session_state.medications:
         med_time = med.get('time', '00:00')
         
         
         if med.get('reminder_times'):
             for time_slot in med['reminder_times']:
-                if time_slot < current_time and time_slot not in med.get('taken_times', []):
+                if time_slot < current_time and not med.get('taken_today', False):
                     if not any(m['id'] == med['id'] and m['time'] == time_slot for m in missed):
                         missed.append({
                             'id': med['id'],
                             'name': med['name'],
                             'time': time_slot,
                             'dosageAmount': med['dosageAmount'],
-                            'color': med.get('color', 'blue')
+                            'color': med.get('color', 'blue'),
+                            'unique_key': f"{med['id']}_{time_slot.replace(':', '')}"  # FIXED: Unique composite key
                         })
-                elif time_slot > current_time and time_slot not in med.get('taken_times', []):
-
+                elif time_slot > current_time and not med.get('taken_today', False):
                     if not any(m['id'] == med['id'] and m['time'] == time_slot for m in upcoming):
                         upcoming.append({
                             'id': med['id'],
                             'name': med['name'],
                             'time': time_slot,
                             'dosageAmount': med['dosageAmount'],
-                            'color': med.get('color', 'blue')
+                            'color': med.get('color', 'blue'),
+                            'unique_key': f"{med['id']}_{time_slot.replace(':', '')}"  # FIXED: Unique composite key
                         })
         
         
@@ -290,7 +291,8 @@ def categorize_medications_by_status(medications):
                     'name': med['name'],
                     'time': med_time,
                     'dosageAmount': med['dosageAmount'],
-                    'color': med.get('color', 'blue')
+                    'color': med.get('color', 'blue'),
+                    'unique_key': f"{med['id']}_{med_time.replace(':', '')}"  # FIXED: Unique composite key
                 })
         else:
             if not any(m['id'] == med['id'] and m['time'] == med_time for m in upcoming):
@@ -299,7 +301,8 @@ def categorize_medications_by_status(medications):
                     'name': med['name'],
                     'time': med_time,
                     'dosageAmount': med['dosageAmount'],
-                    'color': med.get('color', 'blue')
+                    'color': med.get('color', 'blue'),
+                    'unique_key': f"{med['id']}_{med_time.replace(':', '')}"  # FIXED: Unique composite key
                 })
     
     
@@ -422,7 +425,7 @@ def check_due_medications(medications):
         if not med.get('taken_today', False):
             med_time = med.get('time', '00:00')
             
-            
+           
             med_datetime = datetime.strptime(med_time, "%H:%M").replace(
                 year=now.year, month=now.month, day=now.day
             )
@@ -441,30 +444,23 @@ def check_due_medications(medications):
                     
                     if time_diff <= 5 and med not in due_medications:
                         due_medications.append(med)
-                        return due_medications
+    
+    return due_medications
 
 def calculate_adherence(medications):
-    """Calculate medication adherence percentage (dose-based)"""
+    """Calculate medication adherence percentage"""
     if not medications:
         return 0
-
-    total_doses = 0        # ✅ INITIALIZED
-    taken_doses = 0        # ✅ INITIALIZED
-
-    for med in medications:
-        times = med.get('reminder_times', [med.get('time')])
-        total_doses += len(times)
-        taken_doses += len(med.get('taken_times', []))
-
-    return (taken_doses / total_doses * 100) if total_doses > 0 else 0
-
+    taken = sum(1 for med in medications if med.get('taken_today', False))
+    total = len(medications)
+    return (taken / total * 100) if total > 0 else 0
 
 def get_mascot_image(mood):
     mascot_images = {
-        'happy': "happy.png",
-        'excited':  "happy.png",
-        'neutral':  "happy.png",
-        'worried':  "happy.png",
+        'happy': r"C:\Users\tnvxx\OneDrive\Desktop\sucess.png",
+        'excited': r"C:\Users\tnvxx\OneDrive\Desktop\sucess.png",
+        'neutral': '🐢',
+        'worried': '🐢'
     }
     return mascot_images.get(mood, '🐢')
 
@@ -567,6 +563,11 @@ def initialize_session_state():
         st.session_state.sound_enabled = True
     if 'last_reminder_check' not in st.session_state:
         st.session_state.last_reminder_check = datetime.now()
+    # NEW: Undo functionality
+    if 'undo_stack' not in st.session_state:
+        st.session_state.undo_stack = []
+    if 'last_action' not in st.session_state:
+        st.session_state.last_action = None
 
 def save_user_data():
     """Save user data to SQLite database"""
@@ -693,8 +694,6 @@ def load_user_data(username):
                 'color': med[7],
                 'instructions': med[8],
                 'taken_today': bool(med[9]),
-                'taken_times': [],
-
                 'created_at': med[10]
             })
         
@@ -832,6 +831,81 @@ def clear_session_data():
     st.session_state.signup_step = 1
     st.session_state.signup_data = {}
     st.session_state.editing_medication = None
+    st.session_state.undo_stack = []
+    st.session_state.last_action = None
+
+# NEW: Undo functionality functions
+def push_undo_state(action_type, data):
+    """Push state to undo stack"""
+    st.session_state.undo_stack.append({
+        'action_type': action_type,
+        'data': data,
+        'timestamp': datetime.now().strftime("%H:%M:%S")
+    })
+    # Keep only last 10 actions
+    if len(st.session_state.undo_stack) > 10:
+        st.session_state.undo_stack.pop(0)
+
+def undo_last_action():
+    """Undo the last action"""
+    if not st.session_state.undo_stack:
+        return False
+    
+    last_action = st.session_state.undo_stack.pop()
+    
+    if last_action['action_type'] == 'medication_taken':
+        med_id = last_action['data']['med_id']
+        for med in st.session_state.medications:
+            if med['id'] == med_id:
+                med['taken_today'] = False
+                update_medication_history(med_id, 'untaken')
+                update_adherence_history()
+                save_user_data()
+                st.session_state.last_action = f"Undid taking {med['name']}"
+                return True
+    
+    elif last_action['action_type'] == 'medication_added':
+        med_index = last_action['data']['med_index']
+        st.session_state.medications.pop(med_index)
+        save_user_data()
+        st.session_state.last_action = "Undid adding medication"
+        return True
+    
+    elif last_action['action_type'] == 'medication_deleted':
+        deleted_med = last_action['data']['medication']
+        st.session_state.medications.append(deleted_med)
+        save_user_data()
+        st.session_state.last_action = f"Restored {deleted_med['name']}"
+        return True
+    
+    elif last_action['action_type'] == 'appointment_added':
+        appt_index = last_action['data']['appt_index']
+        st.session_state.appointments.pop(appt_index)
+        save_user_data()
+        st.session_state.last_action = "Undid adding appointment"
+        return True
+    
+    elif last_action['action_type'] == 'appointment_deleted':
+        deleted_appt = last_action['data']['appointment']
+        st.session_state.appointments.append(deleted_appt)
+        save_user_data()
+        st.session_state.last_action = f"Restored appointment with Dr. {deleted_appt['doctor']}"
+        return True
+    
+    return False
+
+def show_undo_button():
+    """Show undo button if there are actions to undo"""
+    if st.session_state.undo_stack:
+        last_action = st.session_state.undo_stack[-1]
+        col1, col2 = st.columns([4, 1])
+        with col2:
+            if st.button("↩️ Undo", key="undo_btn", use_container_width=True):
+                if undo_last_action():
+                    st.success(st.session_state.last_action)
+                    st.rerun()
+                else:
+                    st.error("Nothing to undo")
 
 def inject_custom_css(age_category='adult'):
     """Inject custom CSS into Streamlit app with age-based styling"""
@@ -1056,6 +1130,34 @@ def inject_custom_css(age_category='adult'):
         padding: 16px;
         margin: 10px 0;
         border-left: 4px solid #f59e0b;
+    }}
+    
+    /* NEW: Time/Date display styling */
+    .datetime-display {{
+        background: rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(10px);
+        border-radius: 16px;
+        padding: 20px 30px;
+        text-align: center;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        margin-bottom: 20px;
+    }}
+    
+    .datetime-display h2 {{
+        color: #ffffff !important;
+        margin: 0;
+        font-size: 48px;
+        font-weight: 900;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+    }}
+    
+    .datetime-display p {{
+        color: #ffffff !important;
+        margin: 5px 0 0 0;
+        font-size: 20px;
+        font-weight: 500;
+        opacity: 0.9;
     }}
     </style>
     """
@@ -1485,10 +1587,8 @@ def patient_login_page():
         tab1, tab2 = st.tabs(["🔒 Password", "📧 Email"])
         
         with tab1:
-            st.markdown("<h3 style='color: #ffffff;'>  Username & Password Login</h3>", unsafe_allow_html=True)
+            st.markdown("<h3 style='color: #ffffff;'>### Username & Password Login</h3>", unsafe_allow_html=True)
             username = st.text_input("Username", key="login_username")
-
-
             password = st.text_input("Password", type="password", key="login_password")
             
             if st.button("✨ Sign In", use_container_width=True):
@@ -1504,6 +1604,8 @@ def patient_login_page():
         
         with tab2:
             st.markdown("<h3 style='color: #ffffff;'>### Email Verification Login</h3>", unsafe_allow_html=True)
+            
+            email = st.text_input("Email Address", key="login_email")
             
             if st.button("Send Login Code", use_container_width=True):
                 if email:
@@ -1541,7 +1643,7 @@ def caregiver_login_page():
         tab1, tab2 = st.tabs(["🔒 Password", "🔑 Patient Code"])
         
         with tab1:
-            st.markdown("<h3 style='color: #ffffff;'>  Username & Password</h3>", unsafe_allow_html=True)
+            st.markdown("<h3 style='color: #ffffff;'>### Username & Password</h3>", unsafe_allow_html=True)
             username = st.text_input("Username", key="caregiver_username")
             password = st.text_input("Password", type="password", key="caregiver_password")
             
@@ -1557,7 +1659,8 @@ def caregiver_login_page():
                     st.warning("Please enter username and password")
         
         with tab2:
-            st.markdown("<h3 style='color: #ffffff;'>  Connect to Patient</h3>", unsafe_allow_html=True)
+            st.markdown("<h3 style='color: #ffffff;'>### Connect to Patient</h3>", unsafe_allow_html=True)
+            caregiver_username = st.text_input("Your Username", key="caregiver_username_connect")
             patient_code = st.text_input("Patient Access Code", max_chars=6, key="patient_code")
             
             if st.button("🔗 Connect", use_container_width=True):
@@ -1599,9 +1702,9 @@ def patient_signup_page():
         st.markdown(f"<p style='text-align: center; color: white;'>Step {st.session_state.signup_step} of 5</p>", unsafe_allow_html=True)
         
         if st.session_state.signup_step == 1:
-            st.markdown("<h3 style='color: #ffffff;'>  👤 Basic Information</h3>", unsafe_allow_html=True)
+            st.markdown("<h3 style='color: #ffffff;'>### 👤 Basic Information</h3>", unsafe_allow_html=True)
+            name = st.text_input("Full Name", value=st.session_state.signup_data.get('name', ''), key="signup_name")
             username = st.text_input("Username", value=st.session_state.signup_data.get('username', ''))
-            name = st.text_input("Full Name",value=st.session_state.signup_data.get('name', ''))
             age = st.number_input("Age", min_value=1, max_value=120, value=st.session_state.signup_data.get('age', 25))
             password = st.text_input("Password", type="password", value=st.session_state.signup_data.get('password', ''))
             
@@ -1620,7 +1723,7 @@ def patient_signup_page():
                     st.warning("Please fill all required fields")
         
         elif st.session_state.signup_step == 2:
-            st.markdown("<h3 style='color: #ffffff;'>  📧 Email Verification (Optional)</h3>", unsafe_allow_html=True)
+            st.markdown("<h3 style='color: #ffffff;'>### 📧 Email Verification (Optional)</h3>", unsafe_allow_html=True)
             
             email = st.text_input("Email Address (optional)", value=st.session_state.signup_data.get('email', ''))
             
@@ -1638,7 +1741,7 @@ def patient_signup_page():
                     st.rerun()
         
         elif st.session_state.signup_step == 3:
-            st.markdown("<h3 style='color: #ffffff;'>  🏥 Your Health Conditions</h3>", unsafe_allow_html=True)
+            st.markdown("<h3 style='color: #ffffff;'>### 🏥 Your Health Conditions</h3>", unsafe_allow_html=True)
             if 'diseases' not in st.session_state.signup_data:
                 st.session_state.signup_data['diseases'] = []
             
@@ -1722,8 +1825,7 @@ def patient_signup_page():
                         'frequency': frequency.lower().replace(' ', '-'),
                         'time': reminder_times_input[0] if reminder_times_input else '09:00',
                         'color': color.lower(),
-                        'taken_today': False,
-                        'taken_times': []
+                        'taken_today': False
                     }
                     
                     if len(reminder_times_input) > 1:
@@ -1755,7 +1857,7 @@ def patient_signup_page():
                     st.rerun()
         
         elif st.session_state.signup_step == 5:
-            st.markdown("<h3 style='color: #ffffff;'>  ✅ Review Your Information</h3>", unsafe_allow_html=True)
+            st.markdown("<h3 style='color: #ffffff;'>### ✅ Review Your Information</h3>", unsafe_allow_html=True)
             st.markdown(f"**Name:** {st.session_state.signup_data.get('name')}")
             st.markdown(f"**Username:** {st.session_state.signup_data.get('username')}")
             st.markdown(f"**Age:** {st.session_state.signup_data.get('age')}")
@@ -1802,13 +1904,13 @@ def caregiver_signup_page():
     with col2:
         st.markdown("<div class='auth-card' style='border: 3px solid #10b981;'>", unsafe_allow_html=True)
         
-        st.markdown("<h3 style='color: #ffffff;'>  Step 1: Basic Information</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='color: #ffffff;'>### Step 1: Basic Information</h3>", unsafe_allow_html=True)
         name = st.text_input("Full Name", key="cg_name")
         username = st.text_input("Username", key="cg_username")
         phone = st.text_input("Phone Number (optional)", key="cg_phone")
         password = st.text_input("Password", type="password", key="cg_password")
         
-        st.markdown("<h3 style='color: #ffffff;'>  Step 2: Professional Details</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='color: #ffffff;'>### Step 2: Professional Details</h3>", unsafe_allow_html=True)
         
         relationship = st.selectbox("Your Role", [
             "Family Member", "Professional Caregiver", "Nurse",
@@ -1857,14 +1959,31 @@ def get_mascot_text_color(mood):
     }
     return colors.get(mood, '#374151')
 
+def display_datetime_header():
+    """Display real-time date and time header with auto-refresh"""
+    now = datetime.now()
+    current_time = now.strftime("%I:%M:%S %p")
+    current_date = now.strftime("%A, %B %d, %Y")
+    
+    st.markdown(f"""
+    <div class='datetime-display'>
+        <h2>{current_time}</h2>
+        <p>{current_date}</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Auto-refresh every second
+    time.sleep(0.1)
+    st.rerun()
+
 def dashboard_overview_tab(age_category):
     """Dashboard overview with stats and today's schedule"""
     st.markdown("<h3 style='color: #ffffff;'>📊 Your Health Overview</h3>", unsafe_allow_html=True)
     
+    # NEW: Display real-time date/time
+    display_datetime_header()
     
-    missed, upcoming, taken = categorize_medications_by_status(st.session_state.medications)
-    due_meds = check_due_medications(st.session_state.medications)
-
+    missed, upcoming, taken = categorize_medications_by_status()
     
     col1, col2, col3, col4 = st.columns(4)
     
@@ -1911,6 +2030,8 @@ def dashboard_overview_tab(age_category):
     
     st.markdown("<br>", unsafe_allow_html=True)
     
+    # NEW: Show undo button if available
+    show_undo_button()
     
     time_of_day = get_time_of_day().lower().replace('👋 ', '')
     mascot_message = get_mascot_message(adherence, time_of_day)
@@ -1942,48 +2063,41 @@ def dashboard_overview_tab(age_category):
             st.rerun()
     
  
-            st.markdown("<h3 style='color: #ffffff;'>  🕐 Today's Medication Schedule</h3>", unsafe_allow_html=True)
+            st.markdown("<h3 style='color: #ffffff;'>### 🕐 Today's Medication Schedule</h3>", unsafe_allow_html=True)
     
   
     due_meds = check_due_medications(st.session_state.medications)
+    
     if due_meds:
-       if st.session_state.sound_enabled:
-          play_reminder_sound()
-       for med in due_meds:
-          st.markdown(
-            f"""
+        if st.session_state.sound_enabled:
+            play_reminder_sound()
+        
+        for med in due_meds:
+            st.markdown(f"""
             <div class='reminder-item'>
-                <strong>🔔 REMINDER NOW:</strong>
-                {med['name']} ({med['dosageAmount']}) at {format_time(med['time'])}
+                <strong>🔔 REMINDER NOW:</strong> {med['name']} ({med['dosageAmount']}) at {format_time(med['time'])}
             </div>
-            """,
-            unsafe_allow_html=True
-        )
-       if st.button(
-            "✓ Take Now",
-            key=f"take_due_{med['id']}_{med['time']}",
-            use_container_width=True):
-            dose_time = med['time']
-
-            for m in st.session_state.medications:
-                if m['id'] == med['id']:
-                    if dose_time not in m.get('taken_times', []):
-                        m['taken_times'].append(dose_time)
-
-                    # Mark medicine fully taken only if all doses done
-                    all_times = m.get('reminder_times', [m.get('time')])
-                    if set(m['taken_times']) == set(all_times):
+            """, unsafe_allow_html=True)
+            
+            # FIXED: Use unique_key instead of med['id'] to prevent duplicate keys
+            if st.button("✓ Take Now", key=f"take_due_{med['id']}", use_container_width=True):
+                for m in st.session_state.medications:
+                    if m['id'] == med['id']:
                         m['taken_today'] = True
-
-                    update_medication_history(med['id'], 'taken')
-                    update_adherence_history()
-                    save_user_data()
-                    st.rerun()
+                        update_medication_history(m['id'], 'taken')
+                        update_adherence_history()
+                        # NEW: Push to undo stack
+                        push_undo_state('medication_taken', {'med_id': med['id'], 'med_name': med['name']})
+                        save_user_data()
+                        st.rerun()
     else:
-          st.info("🎉 No medications due right now!")
-          st.markdown("<br>", unsafe_allow_html=True)
-          st.markdown("<h4 style='color: #ffffff;'> # 📅 Upcoming Reminders (Next 30 minutes)</h4>", unsafe_allow_html=True)
-          upcoming_count = 0
+        st.info("No medications due right now.")
+    
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("<h4 style='color: #ffffff;'>#### 📅 Upcoming Reminders (Next 30 minutes)</h4>", unsafe_allow_html=True)
+    
+    upcoming_count = 0
     for med in upcoming[:5]: 
         med_time = datetime.strptime(med['time'], "%H:%M")
         now = datetime.now()
@@ -2003,8 +2117,6 @@ def dashboard_overview_tab(age_category):
     st.markdown("</div>", unsafe_allow_html=True)
    
     
-    st.markdown("<br>", unsafe_allow_html=True)
-    
     
     has_upcoming_reminder = check_upcoming_reminders(upcoming)
     
@@ -2022,11 +2134,11 @@ def dashboard_overview_tab(age_category):
     st.markdown("<br>", unsafe_allow_html=True)
     
    
-    st.markdown("<h3 style='color: #ffffff;'>  📅 Active Reminders</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #ffffff;'>### 📅 Active Reminders</h3>", unsafe_allow_html=True)
     if st.session_state.medications:
         
         if missed:
-            st.markdown("<h4 style='color: #ffffff;'> # ❌ Missed Medications</h4>", unsafe_allow_html=True)
+            st.markdown("<h4 style='color: #ffffff;'>#### ❌ Missed Medications</h4>", unsafe_allow_html=True)
             for med in missed:
                 color_hex = get_medication_color_hex(med.get('color', 'blue'))
                 st.markdown(f"""
@@ -2042,11 +2154,15 @@ def dashboard_overview_tab(age_category):
                 
                 col1, col2 = st.columns([3, 1])
                 with col2:
-                    if st.button("✓ Take Now", key=f"take_missed_{med['id']}", use_container_width=True):
+                    # FIXED: Use unique_key for missed medications
+                    unique_key = med.get('unique_key', f"missed_{med['id']}")
+                    if st.button("✓ Take Now", key=f"take_missed_{unique_key}", use_container_width=True):
                         for m in st.session_state.medications:
                             if m['id'] == med['id']:
                                 m['taken_today'] = True
                                 update_medication_history(m['id'], 'taken')
+                                # NEW: Push to undo stack
+                                push_undo_state('medication_taken', {'med_id': med['id'], 'med_name': med['name']})
                         update_adherence_history()
                         save_user_data()
                         st.rerun()
@@ -2054,7 +2170,7 @@ def dashboard_overview_tab(age_category):
         
         
         if upcoming:
-            st.markdown("<h4 style='color: #ffffff;'> # ⏰ Upcoming Medications</h4>", unsafe_allow_html=True)
+            st.markdown("<h4 style='color: #ffffff;'>#### ⏰ Upcoming Medications</h4>", unsafe_allow_html=True)
             for med in upcoming:
                 color_hex = get_medication_color_hex(med.get('color', 'blue'))
                 st.markdown(f"""
@@ -2072,12 +2188,16 @@ def dashboard_overview_tab(age_category):
                 
                 col1, col2 = st.columns([3, 1])
                 with col2:
-                    if st.button("\u2713 Take Now", key=f"take_upcoming_{med['id']}_{med['time']}", use_container_width=True):
+                    # FIXED: Use unique_key instead of med['id']
+                    unique_key = med.get('unique_key', f"upcoming_{med['id']}")
+                    if st.button("\u2713 Take Now", key=f"take_upcoming_{unique_key}", use_container_width=True):
                         for m in st.session_state.medications:
                             if m['id'] == med['id']:
                                 m['taken_today'] = True
                                 update_medication_history(m['id'], 'taken')
                                 play_notification_sound()
+                                # NEW: Push to undo stack
+                                push_undo_state('medication_taken', {'med_id': med['id'], 'med_name': med['name']})
                         update_adherence_history()
                         save_user_data()
                         st.rerun()
@@ -2085,7 +2205,7 @@ def dashboard_overview_tab(age_category):
         
         
         if taken:
-            st.markdown("<h4 style='color: #ffffff;'> # ✅ Taken Medications</h4>", unsafe_allow_html=True)
+            st.markdown("<h4 style='color: #ffffff;'>#### ✅ Taken Medications</h4>", unsafe_allow_html=True)
             for med in taken:
                 color_hex = get_medication_color_hex(med.get('color', 'blue'))
                 st.markdown(f"""
@@ -2105,7 +2225,7 @@ def analytics_tab(age_category):
     """Analytics tab with comprehensive graphs"""
     st.markdown("<h3 style='color: #ffffff;'>📊 Medication Analytics & Insights</h3>", unsafe_allow_html=True)
     
-    st.markdown("<h4 style='color: #ffffff;'> # Adherence Trend</h4>", unsafe_allow_html=True)
+    st.markdown("<h4 style='color: #ffffff;'>#### Adherence Trend</h4>", unsafe_allow_html=True)
     st.plotly_chart(
         create_adherence_line_chart(st.session_state.get('adherence_history', []), age_category),
         use_container_width=True
@@ -2123,7 +2243,7 @@ def analytics_tab(age_category):
     
     st.markdown("<br>", unsafe_allow_html=True)
     
-    st.markdown("<h4 style='color: #ffffff;'> # Weekly Medication Pattern</h4>", unsafe_allow_html=True)
+    st.markdown("<h4 style='color: #ffffff;'>#### Weekly Medication Pattern</h4>", unsafe_allow_html=True)
     st.plotly_chart(create_weekly_heatmap(st.session_state.get('medication_history', [])), use_container_width=True)
 
 def medications_tab():
@@ -2274,6 +2394,8 @@ def medications_tab():
                     st.warning(f"⚠️ Time conflict detected with: {', '.join(conflicts)}. Medications are scheduled close together.")
                 
                 st.session_state.medications.append(new_med)
+                # NEW: Push to undo stack
+                push_undo_state('medication_added', {'med_index': len(st.session_state.medications) - 1, 'med_name': new_med_name})
                 save_user_data()
                 st.success(f"Added {new_med_name}!")
                 st.rerun()
@@ -2315,7 +2437,7 @@ def medications_tab():
             col1, col2, col3 = st.columns([4, 2, 1])
             
             with col1:
-                st.markdown(f"  {med['name']}")
+                st.markdown(f"### {med['name']}")
                 st.markdown(f"**Dosage:** {med['dosageAmount']} | **Type:** {med['dosageType'].capitalize()}")
                 st.markdown(f"**Time:** {med['time']} | **Frequency:** {med['frequency'].replace('-', ' ').title()}")
                 if med.get('reminder_times'):
@@ -2338,6 +2460,8 @@ def medications_tab():
                     st.rerun()
                 
                 if st.button("🗑️", key=f"delete_{med['id']}", help="Delete"):
+                    # NEW: Push to undo stack before deleting
+                    push_undo_state('medication_deleted', {'medication': med.copy()})
                     st.session_state.medications = [m for m in st.session_state.medications if m['id'] != med['id']]
                     save_user_data()
                     st.rerun()
@@ -2348,6 +2472,8 @@ def medications_tab():
                         play_notification_sound()
                         update_medication_history(med['id'], 'taken')
                         update_adherence_history()
+                        # NEW: Push to undo stack
+                        push_undo_state('medication_taken', {'med_id': med['id'], 'med_name': med['name']})
                         save_user_data()
                         st.rerun()
             
@@ -2390,6 +2516,8 @@ def appointments_tab():
                 }
                 
                 st.session_state.appointments.append(new_appt)
+                # NEW: Push to undo stack
+                push_undo_state('appointment_added', {'appt_index': len(st.session_state.appointments) - 1, 'doctor': appt_doctor})
                 save_user_data()
                 st.success(f"Appointment with Dr. {appt_doctor} scheduled!")
                 st.rerun()
@@ -2434,7 +2562,7 @@ def appointments_tab():
             col1, col2, col3 = st.columns([4, 2, 1])
             
             with col1:
-                st.markdown(f"  👨‍⚕️ Dr. {appt['doctor']}")
+                st.markdown(f"### 👨‍⚕️ Dr. {appt['doctor']}")
                 if appt.get('specialty'):
                     st.markdown(f"**Specialty:** {appt['specialty']}")
                 st.markdown(f"**Date:** {format_date(appt['date'])} ({days} days)" if days >= 0 else f"**Date:** {format_date(appt['date'])} (past)")
@@ -2454,11 +2582,13 @@ def appointments_tab():
                     elif days == 1:
                         st.markdown("**Tomorrow**")
                     else:
-                        st.markdown(f"  📅")
+                        st.markdown(f"### 📅")
                         st.markdown(f"**In {days} days**")
             
             with col3:
                 if st.button("🗑️", key=f"delete_appt_{appt['id']}", help="Cancel"):
+                    # NEW: Push to undo stack before deleting
+                    push_undo_state('appointment_deleted', {'appointment': appt.copy()})
                     st.session_state.appointments = [a for a in st.session_state.appointments if a['id'] != appt['id']]
                     save_user_data()
                     st.rerun()
@@ -2571,7 +2701,7 @@ def side_effects_tab():
             col1, col2, col3 = st.columns([4, 2, 1])
             
             with col1:
-                st.markdown(f"  {severity_emoji} {effect['medication']}")
+                st.markdown(f"### {severity_emoji} {effect['medication']}")
                 st.markdown(f"**Type:** {effect.get('type', 'Not specified')}")
                 st.markdown(f"**Severity:** {severity}")
                 st.markdown(f"**Date:** {effect['date']}")
@@ -2911,7 +3041,7 @@ def caregiver_dashboard_page():
                 col1, col2, col3 = st.columns([3, 2, 1])
                 
                 with col1:
-                    st.markdown(f"  👤 {patient['name']}")
+                    st.markdown(f"### 👤 {patient['name']}")
                     st.markdown(f"**Age:** {patient['age']}")
                     st.markdown(f"**Access Code:** {patient['access_code']}")
                     st.markdown(f"**Last Contact:** {patient.get('last_contact', 'N/A')}")
@@ -3074,5 +3204,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
