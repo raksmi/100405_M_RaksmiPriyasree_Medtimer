@@ -1,3 +1,4 @@
+
 import streamlit as st
 import sqlite3
 import json
@@ -6,15 +7,10 @@ import plotly.express as px
 from datetime import datetime, timedelta, date
 import pandas as pd
 import random
-import base64
-import io
-from reportlab.lib.pagesizes import letter, A4
-from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
-import time
+
+# ============================================
+# PAGE CONFIGURATION
+# ============================================
 
 st.set_page_config(
     page_title="MedTimer - Medication Management",
@@ -23,620 +19,18 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ============ WOW DASHBOARD CSS ============
-def inject_wow_css(age_category='adult'):
-    """Inject stunning WOW CSS with glassmorphism, gradients, and modern animations"""
-    primary_color = get_primary_color(age_category)
-    secondary_color = get_secondary_color(age_category)
-    font_size = get_font_size(age_category)
-    background_style = get_gradient_style(age_category)
-    
-    css = f"""
-    <style>
-    /* ============ GLOBAL STYLES ============ */
-    .stApp {{
-        {background_style}
-        min-height: 100vh;
-    }}
-    
-    #MainMenu {{visibility: hidden;}}
-    footer {{visibility: hidden;}}
-    header {{visibility: hidden;}}
-    
-    /* ============ CUSTOM FONTS ============ */
-    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap');
-    
-    body {{
-        font-family: 'Poppins', sans-serif !important;
-    }}
-    
-    /* ============ GLASSMORPHISM CARDS ============ */
-    .glass-card {{
-        background: rgba(255, 255, 255, 0.15);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border-radius: 24px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        padding: 24px;
-        margin: 12px 0;
-        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        position: relative;
-        overflow: hidden;
-    }}
-    
-    .glass-card::before {{
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 4px;
-        background: linear-gradient(90deg, {primary_color}, {secondary_color}, {primary_color});
-        background-size: 200% 100%;
-        animation: shimmer 3s infinite;
-    }}
-    
-    .glass-card:hover {{
-        transform: translateY(-8px) scale(1.02);
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-        border-color: rgba(255, 255, 255, 0.4);
-    }}
-    
-    @keyframes shimmer {{
-        0% {{ background-position: -200% 0; }}
-        100% {{ background-position: 200% 0; }}
-    }}
-    
-    /* ============ NEON GLOW EFFECTS ============ */
-    .neon-text {{
-        text-shadow: 
-            0 0 10px {primary_color},
-            0 0 20px {primary_color},
-            0 0 30px {primary_color},
-            0 0 40px {primary_color};
-        animation: neon-pulse 2s infinite alternate;
-    }}
-    
-    @keyframes neon-pulse {{
-        0% {{ opacity: 0.8; }}
-        100% {{ opacity: 1; text-shadow: 0 0 10px {primary_color}, 0 0 20px {primary_color}, 0 0 30px {primary_color}, 0 0 40px {primary_color}, 0 0 50px {primary_color}; }}
-    }}
-    
-    /* ============ 3D FLOATING CARDS ============ */
-    .floating-card {{
-        background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.1) 100%);
-        backdrop-filter: blur(30px);
-        -webkit-backdrop-filter: blur(30px);
-        border-radius: 28px;
-        border: 2px solid rgba(255, 255, 255, 0.3);
-        box-shadow: 
-            0 20px 60px rgba(0, 0, 0, 0.15),
-            0 0 0 1px rgba(255, 255, 255, 0.1) inset;
-        padding: 32px;
-        margin: 16px 0;
-        transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        transform-style: preserve-3d;
-        perspective: 1000px;
-    }}
-    
-    .floating-card:hover {{
-        transform: translateY(-12px) rotateX(5deg) rotateY(-5deg);
-        box-shadow: 
-            0 30px 90px rgba(0, 0, 0, 0.25),
-            0 0 0 1px rgba(255, 255, 255, 0.2) inset;
-    }}
-    
-    /* ============ ANIMATED STAT CARDS ============ */
-    .stat-card-wow {{
-        background: linear-gradient(145deg, rgba(255,255,255,0.25), rgba(255,255,255,0.05));
-        backdrop-filter: blur(40px);
-        -webkit-backdrop-filter: blur(40px);
-        border-radius: 32px;
-        border: 2px solid rgba(255, 255, 255, 0.25);
-        box-shadow: 
-            0 25px 70px rgba(0, 0, 0, 0.15),
-            inset 0 2px 10px rgba(255, 255, 255, 0.3);
-        padding: 40px 30px;
-        text-align: center;
-        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        position: relative;
-        overflow: hidden;
-    }}
-    
-    .stat-card-wow::before {{
-        content: '';
-        position: absolute;
-        top: -50%;
-        left: -50%;
-        width: 200%;
-        height: 200%;
-        background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
-        animation: rotate-bg 10s linear infinite;
-    }}
-    
-    .stat-card-wow:hover {{
-        transform: scale(1.08) translateY(-10px);
-        box-shadow: 
-            0 40px 100px rgba(0, 0, 0, 0.25),
-            inset 0 2px 20px rgba(255, 255, 255, 0.4);
-    }}
-    
-    @keyframes rotate-bg {{
-        0% {{ transform: rotate(0deg); }}
-        100% {{ transform: rotate(360deg); }}
-    }}
-    
-    .stat-number-wow {{
-        font-size: 72px;
-        font-weight: 900;
-        background: linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        text-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-        line-height: 1.2;
-        margin-bottom: 12px;
-        position: relative;
-        z-index: 1;
-        animation: number-pulse 2s ease-in-out infinite;
-    }}
-    
-    @keyframes number-pulse {{
-        0%, 100% {{ transform: scale(1); }}
-        50% {{ transform: scale(1.05); }}
-    }}
-    
-    .stat-label-wow {{
-        font-size: {font_size};
-        color: rgba(255, 255, 255, 0.95);
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 2px;
-        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-        position: relative;
-        z-index: 1;
-    }}
-    
-    /* ============ MEDICATION DOSE CARDS ============ */
-    .dose-card {{
-        background: linear-gradient(145deg, rgba(255,255,255,0.22), rgba(255,255,255,0.08));
-        backdrop-filter: blur(35px);
-        -webkit-backdrop-filter: blur(35px);
-        border-radius: 24px;
-        border: 2px solid rgba(255, 255, 255, 0.3);
-        box-shadow: 
-            0 15px 45px rgba(0, 0, 0, 0.12),
-            inset 0 1px 15px rgba(255, 255, 255, 0.25);
-        padding: 24px 28px;
-        margin: 14px 0;
-        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        position: relative;
-        overflow: hidden;
-    }}
-    
-    .dose-card::before {{
-        content: '';
-        position: absolute;
-        top: 0;
-        left: -100%;
-        width: 100%;
-        height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-        transition: left 0.6s;
-    }}
-    
-    .dose-card:hover::before {{
-        left: 100%;
-    }}
-    
-    .dose-card:hover {{
-        transform: translateX(10px) scale(1.02);
-        box-shadow: 
-            0 25px 60px rgba(0, 0, 0, 0.2),
-            inset 0 1px 20px rgba(255, 255, 255, 0.35);
-    }}
-    
-    .dose-card.missed {{
-        border-left: 6px solid #ef4444;
-        background: linear-gradient(145deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.05));
-    }}
-    
-    .dose-card.upcoming {{
-        border-left: 6px solid #f59e0b;
-        background: linear-gradient(145deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.05));
-    }}
-    
-    .dose-card.taken {{
-        border-left: 6px solid #10b981;
-        background: linear-gradient(145deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.05));
-    }}
-    
-    /* ============ WOW BUTTONS ============ */
-    .wow-button {{
-        background: linear-gradient(135deg, {primary_color}, {secondary_color});
-        border: none;
-        border-radius: 16px;
-        padding: 16px 32px;
-        color: white;
-        font-weight: 700;
-        font-size: 16px;
-        cursor: pointer;
-        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        box-shadow: 
-            0 10px 30px rgba(0, 0, 0, 0.2),
-            inset 0 2px 10px rgba(255, 255, 255, 0.2);
-        position: relative;
-        overflow: hidden;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }}
-    
-    .wow-button::before {{
-        content: '';
-        position: absolute;
-        top: 0;
-        left: -100%;
-        width: 100%;
-        height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-        transition: left 0.6s;
-    }}
-    
-    .wow-button:hover::before {{
-        left: 100%;
-    }}
-    
-    .wow-button:hover {{
-        transform: translateY(-4px) scale(1.05);
-        box-shadow: 
-            0 20px 50px rgba(0, 0, 0, 0.3),
-            inset 0 2px 20px rgba(255, 255, 255, 0.3);
-    }}
-    
-    .wow-button:active {{
-        transform: translateY(0) scale(0.98);
-    }}
-    
-    /* ============ ANIMATED SEPARATORS ============ */
-    .animated-separator {{
-        height: 2px;
-        background: linear-gradient(90deg, 
-            transparent, 
-            {primary_color}, 
-            {secondary_color}, 
-            {primary_color}, 
-            transparent);
-        background-size: 200% 100%;
-        animation: separator-flow 3s linear infinite;
-        margin: 30px 0;
-    }}
-    
-    @keyframes separator-flow {{
-        0% {{ background-position: -200% 0; }}
-        100% {{ background-position: 200% 0; }}
-    }}
-    
-    /* ============ PARTICLES BACKGROUND ============ */
-    .particles {{
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        overflow: hidden;
-        z-index: 0;
-    }}
-    
-    .particle {{
-        position: absolute;
-        width: 10px;
-        height: 10px;
-        background: rgba(255, 255, 255, 0.3);
-        border-radius: 50%;
-        animation: float-particle 15s infinite;
-        opacity: 0;
-    }}
-    
-    @keyframes float-particle {{
-        0% {{ 
-            transform: translateY(100vh) rotate(0deg); 
-            opacity: 0;
-        }}
-        10% {{ opacity: 0.6; }}
-        90% {{ opacity: 0.6; }}
-        100% {{ 
-            transform: translateY(-100vh) rotate(720deg); 
-            opacity: 0;
-        }}
-    }}
-    
-    /* ============ WOW HEADING ============ */
-    .wow-heading {{
-        font-size: 48px;
-        font-weight: 900;
-        background: linear-gradient(135deg, #ffffff 0%, {primary_color} 50%, #ffffff 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        text-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
-        animation: heading-glow 3s ease-in-out infinite alternate;
-        text-align: center;
-        margin-bottom: 10px;
-    }}
-    
-    @keyframes heading-glow {{
-        0% {{ filter: brightness(1); }}
-        100% {{ filter: brightness(1.2); }}
-    }}
-    
-    /* ============ REMINDER BANNER WOW ============ */
-    .reminder-banner-wow {{
-        background: linear-gradient(135deg, rgba(254, 243, 199, 0.95), rgba(253, 230, 138, 0.95));
-        backdrop-filter: blur(30px);
-        -webkit-backdrop-filter: blur(30px);
-        border: 3px solid #f59e0b;
-        border-radius: 24px;
-        padding: 28px 32px;
-        margin: 24px 0;
-        box-shadow: 
-            0 20px 60px rgba(245, 158, 11, 0.3),
-            0 0 0 1px rgba(255, 255, 255, 0.1) inset;
-        animation: pulse-glow 2s ease-in-out infinite;
-        position: relative;
-        overflow: hidden;
-    }}
-    
-    .reminder-banner-wow::before {{
-        content: '';
-        position: absolute;
-        top: -50%;
-        left: -50%;
-        width: 200%;
-        height: 200%;
-        background: radial-gradient(circle, rgba(245, 158, 11, 0.2) 0%, transparent 70%);
-        animation: rotate-bg 5s linear infinite;
-    }}
-    
-    @keyframes pulse-glow {{
-        0%, 100% {{ 
-            box-shadow: 0 20px 60px rgba(245, 158, 11, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
-            transform: scale(1);
-        }}
-        50% {{ 
-            box-shadow: 0 30px 80px rgba(245, 158, 11, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.2) inset;
-            transform: scale(1.02);
-        }}
-    }}
-    
-    .reminder-due-banner-wow {{
-        background: linear-gradient(135deg, rgba(254, 226, 226, 0.95), rgba(252, 165, 165, 0.95));
-        backdrop-filter: blur(30px);
-        -webkit-backdrop-filter: blur(30px);
-        border: 3px solid #ef4444;
-        border-radius: 24px;
-        padding: 28px 32px;
-        margin: 24px 0;
-        box-shadow: 
-            0 20px 60px rgba(239, 68, 68, 0.4),
-            0 0 0 1px rgba(255, 255, 255, 0.1) inset;
-        animation: urgent-pulse 1s ease-in-out infinite;
-        position: relative;
-        overflow: hidden;
-    }}
-    
-    @keyframes urgent-pulse {{
-        0%, 100% {{ 
-            box-shadow: 0 20px 60px rgba(239, 68, 68, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
-            transform: scale(1);
-        }}
-        50% {{ 
-            box-shadow: 0 30px 80px rgba(239, 68, 68, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.2) inset;
-            transform: scale(1.03);
-        }}
-    }}
-    
-    /* ============ MASCOT ANIMATION ============ */
-    .mascot-wow {{
-        font-size: 100px;
-        animation: mascot-bounce 2s ease-in-out infinite;
-        display: inline-block;
-        filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.3));
-    }}
-    
-    @keyframes mascot-bounce {{
-        0%, 100% {{ transform: translateY(0) rotate(0deg); }}
-        25% {{ transform: translateY(-15px) rotate(-5deg); }}
-        50% {{ transform: translateY(0) rotate(0deg); }}
-        75% {{ transform: translateY(-10px) rotate(5deg); }}
-    }}
-    
-    /* ============ SECTION HEADERS WOW ============ */
-    .section-header-wow {{
-        font-size: 32px;
-        font-weight: 800;
-        text-align: center;
-        padding: 20px 40px;
-        border-radius: 20px;
-        margin: 30px 0 20px 0;
-        position: relative;
-        overflow: hidden;
-        text-transform: uppercase;
-        letter-spacing: 3px;
-        animation: header-slide 0.8s ease-out;
-    }}
-    
-    @keyframes header-slide {{
-        0% {{ 
-            opacity: 0;
-            transform: translateY(-30px);
-        }}
-        100% {{ 
-            opacity: 1;
-            transform: translateY(0);
-        }}
-    }}
-    
-    .section-missed-wow {{
-        background: linear-gradient(135deg, rgba(239, 68, 68, 0.9), rgba(220, 38, 38, 0.9));
-        color: white;
-        box-shadow: 0 10px 40px rgba(239, 68, 68, 0.4);
-    }}
-    
-    .section-upcoming-wow {{
-        background: linear-gradient(135deg, rgba(245, 158, 11, 0.9), rgba(217, 119, 6, 0.9));
-        color: white;
-        box-shadow: 0 10px 40px rgba(245, 158, 11, 0.4);
-    }}
-    
-    .section-taken-wow {{
-        background: linear-gradient(135deg, rgba(16, 185, 129, 0.9), rgba(5, 150, 105, 0.9));
-        color: white;
-        box-shadow: 0 10px 40px rgba(16, 185, 129, 0.4);
-    }}
-    
-    /* ============ CHART CONTAINER ============ */
-    .chart-container-wow {{
-        background: linear-gradient(145deg, rgba(255,255,255,0.18), rgba(255,255,255,0.06));
-        backdrop-filter: blur(35px);
-        -webkit-backdrop-filter: blur(35px);
-        border-radius: 28px;
-        border: 2px solid rgba(255, 255, 255, 0.25);
-        box-shadow: 
-            0 20px 60px rgba(0, 0, 0, 0.15),
-            inset 0 2px 15px rgba(255, 255, 255, 0.25);
-        padding: 32px;
-        margin: 20px 0;
-        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    }}
-    
-    .chart-container-wow:hover {{
-        transform: scale(1.02);
-        box-shadow: 
-            0 30px 80px rgba(0, 0, 0, 0.2),
-            inset 0 2px 25px rgba(255, 255, 255, 0.35);
-    }}
-    
-    /* ============ TEXT STYLES ============ */
-    .wow-text {{
-        color: #ffffff;
-        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-        font-weight: 600;
-    }}
-    
-    .wow-text-muted {{
-        color: rgba(255, 255, 255, 0.85);
-        text-shadow: 0 1px 5px rgba(0, 0, 0, 0.2);
-    }}
-    
-    /* ============ FILTER TABS WOW ============ */
-    .filter-tabs-wow {{
-        display: flex;
-        justify-content: center;
-        gap: 12px;
-        margin: 24px 0;
-        flex-wrap: wrap;
-    }}
-    
-    .filter-tab-wow {{
-        background: rgba(255, 255, 255, 0.15);
-        backdrop-filter: blur(20px);
-        border: 2px solid rgba(255, 255, 255, 0.3);
-        border-radius: 50px;
-        padding: 12px 28px;
-        color: white;
-        font-weight: 700;
-        cursor: pointer;
-        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        font-size: 14px;
-    }}
-    
-    .filter-tab-wow:hover {{
-        background: rgba(255, 255, 255, 0.25);
-        transform: translateY(-3px) scale(1.05);
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-    }}
-    
-    .filter-tab-wow.active {{
-        background: linear-gradient(135deg, {primary_color}, {secondary_color});
-        border-color: rgba(255, 255, 255, 0.5);
-        box-shadow: 
-            0 10px 30px rgba(0, 0, 0, 0.3),
-            0 0 20px rgba(0, 0, 0, 0.2) inset;
-    }}
-    
-    /* ============ STYLES FOR STREAMLIT COMPONENTS ============ */
-    h1, h2, h3, h4, h5, h6 {{
-        font-weight: 800 !important;
-        color: #ffffff !important;
-    }}
-    
-    p, div, span, label {{
-        color: rgba(255, 255, 255, 0.95) !important;
-    }}
-    
-    .stButton > button {{
-        border-radius: 16px !important;
-        font-weight: 700 !important;
-        padding: 14px 28px !important;
-        border: none !important;
-        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2) !important;
-        font-size: 16px !important;
-        color: #ffffff !important;
-        text-transform: uppercase !important;
-        letter-spacing: 1px !important;
-        background: linear-gradient(135deg, {primary_color}, {secondary_color}) !important;
-    }}
-    
-    .stButton > button:hover {{
-        transform: translateY(-4px) scale(1.05) !important;
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3) !important;
-    }}
-    
-    /* ============ ANIMATION ON SCROLL ============ */
-    .animate-on-scroll {{
-        opacity: 0;
-        transform: translateY(30px);
-        transition: all 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    }}
-    
-    .animate-on-scroll.visible {{
-        opacity: 1;
-        transform: translateY(0);
-    }}
-    
-    </style>
-    
-    <!-- Particles Background -->
-    <div class="particles">
-        <div class="particle" style="left: 10%; animation-delay: 0s;"></div>
-        <div class="particle" style="left: 20%; animation-delay: 2s;"></div>
-        <div class="particle" style="left: 30%; animation-delay: 4s;"></div>
-        <div class="particle" style="left: 40%; animation-delay: 6s;"></div>
-        <div class="particle" style="left: 50%; animation-delay: 8s;"></div>
-        <div class="particle" style="left: 60%; animation-delay: 10s;"></div>
-        <div class="particle" style="left: 70%; animation-delay: 12s;"></div>
-        <div class="particle" style="left: 80%; animation-delay: 14s;"></div>
-        <div class="particle" style="left: 90%; animation-delay: 16s;"></div>
-    </div>
-    """
-    return css
-
-# ============ KEEP ALL ORIGINAL FUNCTIONS ============
-# (Copy all the original helper functions here)
-# These functions are unchanged - only the UI is redesigned
+# ============================================
+# DATABASE SETUP
+# ============================================
 
 def init_database():
     """Initialize SQLite database with all tables"""
     conn = sqlite3.connect('medtimer.db', check_same_thread=False)
     c = conn.cursor()
+    
+    # Users table
     c.execute('''CREATE TABLE IF NOT EXISTS users
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  username TEXT UNIQUE,
+                 (username TEXT PRIMARY KEY,
                   name TEXT,
                   age INTEGER,
                   email TEXT,
@@ -648,21 +42,7 @@ def init_database():
                   notes TEXT,
                   created_at TEXT)''')
     
-    c.execute('''CREATE TABLE IF NOT EXISTS medications
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  username TEXT,
-                  name TEXT,
-                  dosage_type TEXT,
-                  dosage_amount TEXT,
-                  frequency TEXT,
-                  time TEXT,
-                  reminder_times TEXT,
-                  color TEXT,
-                  instructions TEXT,
-                  taken_doses TEXT,
-                  created_at TEXT,
-                  FOREIGN KEY(username) REFERENCES users(username))''')
-    
+    # Diseases table
     c.execute('''CREATE TABLE IF NOT EXISTS diseases
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   username TEXT,
@@ -671,6 +51,22 @@ def init_database():
                   notes TEXT,
                   FOREIGN KEY(username) REFERENCES users(username))''')
     
+    # Medications table
+    c.execute('''CREATE TABLE IF NOT EXISTS medications
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  username TEXT,
+                  name TEXT,
+                  dosage_type TEXT,
+                  dosage_amount TEXT,
+                  frequency TEXT,
+                  time TEXT,
+                  color TEXT,
+                  instructions TEXT,
+                  taken_today INTEGER,
+                  created_at TEXT,
+                  FOREIGN KEY(username) REFERENCES users(username))''')
+    
+    # Appointments table
     c.execute('''CREATE TABLE IF NOT EXISTS appointments
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   username TEXT,
@@ -684,6 +80,7 @@ def init_database():
                   created_at TEXT,
                   FOREIGN KEY(username) REFERENCES users(username))''')
     
+    # Side effects table
     c.execute('''CREATE TABLE IF NOT EXISTS side_effects
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   username TEXT,
@@ -695,6 +92,7 @@ def init_database():
                   reported_at TEXT,
                   FOREIGN KEY(username) REFERENCES users(username))''')
     
+    # Medication history table
     c.execute('''CREATE TABLE IF NOT EXISTS medication_history
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   username TEXT,
@@ -704,6 +102,7 @@ def init_database():
                   date TEXT,
                   FOREIGN KEY(username) REFERENCES users(username))''')
     
+    # Adherence history table
     c.execute('''CREATE TABLE IF NOT EXISTS adherence_history
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   username TEXT,
@@ -712,6 +111,7 @@ def init_database():
                   updated TEXT,
                   FOREIGN KEY(username) REFERENCES users(username))''')
     
+    # Connected patients table (for caregivers)
     c.execute('''CREATE TABLE IF NOT EXISTS connected_patients
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   caregiver_username TEXT,
@@ -720,15 +120,6 @@ def init_database():
                   connected_at TEXT,
                   FOREIGN KEY(caregiver_username) REFERENCES users(username))''')
     
-    c.execute('''CREATE TABLE IF NOT EXISTS reminders
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  username TEXT,
-                  medication_id INTEGER,
-                  reminder_time TEXT,
-                  acknowledged INTEGER DEFAULT 0,
-                  created_at TEXT,
-                  FOREIGN KEY(username) REFERENCES users(username))''')
-    
     conn.commit()
     conn.close()
 
@@ -736,27 +127,31 @@ def get_db_connection():
     """Get database connection"""
     return sqlite3.connect('medtimer.db', check_same_thread=False)
 
+# ============================================
+# UTILITY FUNCTIONS
+# ============================================
+
 def get_age_category(age):
     """Determine age category based on age"""
-    if age < 18:
-        return 'youth'
-    elif age <= 40:
+    if age < 13:
+        return 'kid'
+    elif age <= 45:
         return 'adult'
     else:
         return 'senior'
 
 def get_gradient_style(age_category):
     """Get gradient background style based on age category"""
-    if age_category == 'youth':
-        return "background: linear-gradient(135deg, #9333ea 0%, #a855f7 50%, #c084fc 100%);"
+    if age_category == 'kid':
+        return "background: linear-gradient(135deg, #9333ea 0%, #ec4899 100%);"
     elif age_category == 'adult':
-        return "background: linear-gradient(135deg, #22c55e 0%, #16a34a 50%, #15803d 100%);"
+        return "background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);"
     else:
-        return "background: linear-gradient(135deg, #eab308 0%, #ca8a04 50%, #a16207 100%);"
+        return "background: linear-gradient(135deg, #10b981 0%, #14b8a6 100%);"
 
 def get_font_size(age_category):
     """Get font size based on age category"""
-    if age_category == 'youth':
+    if age_category == 'kid':
         return "16px"
     elif age_category == 'adult':
         return "18px"
@@ -765,21 +160,21 @@ def get_font_size(age_category):
 
 def get_primary_color(age_category):
     """Get primary color based on age category"""
-    if age_category == 'youth':
+    if age_category == 'kid':
         return "#9333ea"
     elif age_category == 'adult':
-        return "#22c55e"
+        return "#ef4444"
     else:
-        return "#eab308"
+        return "#10b981"
 
 def get_secondary_color(age_category):
     """Get secondary color based on age category"""
-    if age_category == 'youth':
-        return "#a855f7"
+    if age_category == 'kid':
+        return "#ec4899"
     elif age_category == 'adult':
-        return "#16a34a"
+        return "#f97316"
     else:
-        return "#ca8a04"
+        return "#14b8a6"
 
 def format_time(time_str):
     """Format time string"""
@@ -789,326 +184,25 @@ def format_time(time_str):
     except:
         return time_str
 
-def get_current_datetime_display():
-    """Get current date and time formatted for display"""
-    now = datetime.now()
-    date_str = now.strftime("%A, %B %d, %Y")
-    time_str = now.strftime("%I:%M %p")
-    return date_str, time_str
-
-def get_custom_medication_times(frequency):
-    """Get default custom medication times based on frequency"""
-    frequency_map = {
-        'once-daily': ['09:00'],
-        'twice-daily': ['08:00', '20:00'],
-        'three-times-daily': ['08:00', '13:00', '20:00'],
-        'every-4-hours': ['08:00', '12:00', '16:00', '20:00'],
-        'every-6-hours': ['06:00', '12:00', '18:00', '00:00'],
-        'every-8-hours': ['08:00', '16:00', '00:00'],
-        'every-12-hours': ['08:00', '20:00'],
-        'as-needed': ['09:00'],
-        'weekly': ['09:00'],
-        'monthly': ['09:00']
-    }
-    return frequency_map.get(frequency, ['09:00'])
-
-def play_reminder_sound():
-    """Play reminder sound using HTML audio"""
-    audio_html = """
-    <audio id="reminderSound" autoplay>
-        <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg">
-    </audio>
-    <script>
-        var audio = document.getElementById('reminderSound');
-        audio.volume = 0.7;
-        audio.play().catch(function(error) {
-            console.log('Audio play failed:', error);
-        });
-    </script>
-    """
-    st.markdown(audio_html, unsafe_allow_html=True)
-
-def play_notification_sound():
-    """Play notification sound for reminders"""
-    audio_html = """
-    <audio id="notificationSound" autoplay>
-        <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg">
-    </audio>
-    <script>
-        var audio = document.getElementById('notificationSound');
-        audio.volume = 0.6;
-        audio.play().catch(function(error) {
-            console.log('Audio play failed:', error);
-        });
-    </script>
-    """
-    st.markdown(audio_html, unsafe_allow_html=True)
-
-def show_100_percent_adherence_animation():
-    """Show celebration animation when 100% adherence is achieved"""
-    animation_html = """
-    <style>
-    @keyframes confetti-fall {
-        0% { transform: translateY(-100vh) rotate(0deg); opacity: 1; }
-        100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
-    }
-    
-    @keyframes pulse-glow {
-        0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(16, 185, 129, 0.5); }
-        50% { transform: scale(1.1); box-shadow: 0 0 40px rgba(16, 185, 129, 0.8); }
-    }
-    
-    .confetti {
-        position: fixed;
-        width: 10px;
-        height: 10px;
-        top: -10px;
-        animation: confetti-fall 3s linear forwards;
-        z-index: 9999;
-        pointer-events: none;
-    }
-    </style>
-    
-    <script>
-    function createConfetti() {
-        const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#ffeaa7', '#dfe6e9', '#fd79a8', '#a29bfe'];
-        for (let i = 0; i < 100; i++) {
-            const confetti = document.createElement('div');
-            confetti.className = 'confetti';
-            confetti.style.left = Math.random() * 100 + 'vw';
-            confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
-            confetti.style.animationDelay = Math.random() * 2 + 's';
-            confetti.style.animationDuration = (Math.random() * 2 + 2) + 's';
-            document.body.appendChild(confetti);
-            
-            setTimeout(() => confetti.remove(), 5000);
-        }
-    }
-    
-    createConfetti();
-    </script>
-    """
-    st.markdown(animation_html, unsafe_allow_html=True)
-
-def get_all_doses_for_medication(med):
-    """Get all individual doses for a medication with their status"""
-    today = datetime.now().strftime("%Y-%m-%d")
-    reminder_times = med.get('reminder_times', [med.get('time', '09:00')])
-    taken_doses = med.get('taken_doses', [])
-    
-    doses = []
-    for i, time_str in enumerate(reminder_times):
-        # Check if this specific dose was taken today
-        dose_taken = False
-        for taken_dose in taken_doses:
-            if taken_dose.get('date') == today and taken_dose.get('time') == time_str:
-                dose_taken = True
-                break
-        
-        doses.append({
-            'medication_id': med['id'],
-            'medication_name': med['name'],
-            'dosage_amount': med['dosageAmount'],
-            'frequency': med.get('frequency', ''),
-            'color': med.get('color', 'blue'),
-            'time': time_str,
-            'taken': dose_taken,
-            'dose_index': i
-        })
-    
-    return doses
-
-def categorize_doses_by_status(doses):
-    """Categorize all individual doses into missed, upcoming, and taken"""
-    now = datetime.now()
-    current_time = now.strftime("%H:%M")
-    today = now.strftime("%Y-%m-%d")
-    
-    missed = []
-    upcoming = []
-    taken = []
-    
-    for dose in doses:
-        dose_time = dose['time']
-        dose_taken = dose['taken']
-        
-        if dose_taken:
-            taken.append(dose)
-        else:
-            try:
-                dose_datetime = datetime.strptime(dose_time, "%H:%M")
-                now_time = datetime.strptime(current_time, "%H:%M")
-                
-                if dose_datetime < now_time:
-                    missed.append(dose)
-                else:
-                    upcoming.append(dose)
-            except:
-                upcoming.append(dose)
-    
-    # Sort by time
-    missed.sort(key=lambda x: x['time'])
-    upcoming.sort(key=lambda x: x['time'])
-    taken.sort(key=lambda x: x['time'])
-    
-    return missed, upcoming, taken
-
 def calculate_adherence(medications):
-    """Calculate adherence based on individual doses"""
+    """Calculate medication adherence percentage"""
     if not medications:
         return 0
+    taken = sum(1 for med in medications if med.get('taken_today', False))
+    total = len(medications)
+    return (taken / total * 100) if total > 0 else 0
 
-    total_doses = 0
-    taken_doses = 0
-
-    for med in medications:
-        times = med.get('reminder_times', [med.get('time')])
-        total_doses += len(times)
-        
-        # Count how many of today's doses have been taken
-        today = datetime.now().strftime("%Y-%m-%d")
-        taken = med.get('taken_doses', [])
-        today_taken = [t for t in taken if t.get('date') == today]
-        taken_doses += len(today_taken)
-
-    return round((taken_doses / total_doses) * 100, 2) if total_doses > 0 else 0
-
-def get_mascot_message(adherence, time_of_day):
-    """Get mascot message based on adherence and time of day"""
-    if adherence >= 90:
-        messages = {
-            'morning': [
-                "🌟 You're a medication superstar! Keep shining!",
-                "☀️ Amazing start to the day! 90%+ adherence!",
-                "🎯 Perfect score so far! You're crushing it!"
-            ],
-            'afternoon': [
-                "🌟 Still going strong! You're unstoppable!",
-                "💪 Your dedication is inspiring!",
-                "🏆 Champion status maintained all day!"
-            ],
-            'evening': [
-                "🌟 What a perfect day! You're amazing!",
-                "🎉 Congratulations on near-perfect adherence!",
-                "⭐ You've mastered your medication routine!"
-            ]
-        }
-    elif adherence >= 70:
-        messages = {
-            'morning': [
-                "👍 Good start today! Let's keep it up!",
-                "💪 You're doing great! Keep going!",
-                "🌅 Nice start! Stay on track!"
-            ],
-            'afternoon': [
-                "👍 Still doing well! Almost there!",
-                "💪 Good progress! You can do it!",
-                "🌤 Staying strong! Keep focused!"
-            ],
-            'evening': [
-                "👍 Good effort today! Tomorrow will be even better!",
-                "💪 Solid work! Rest well!",
-                "🌙 Nice job! You're improving!"
-            ]
-        }
-    elif adherence >= 50:
-        messages = {
-            'morning': [
-                "🤔 Let's focus on today's medications!",
-                "💭 Every pill counts! Let's try to take all!",
-                "📋 Review your schedule and stay mindful!"
-            ],
-            'afternoon': [
-                "🤔 Keep trying! You've got this!",
-                "💭 Stay focused on your health goals!",
-                "📋 Don't forget your afternoon doses!"
-            ],
-            'evening': [
-                "🤔 Tomorrow is a new day! Let's plan better!",
-                "💭 Reflect and prepare for a better day!",
-                "📋 Let's organize your schedule for tomorrow!"
-            ]
-        }
-    else:
-        messages = {
-            'morning': [
-                "⚠️ Let's make today better than yesterday!",
-                "💪 Start fresh! You can improve!",
-                "🎯 Focus on one medication at a time!"
-            ],
-            'afternoon': [
-                "⚠️ Don't give up! Every dose matters!",
-                "💪 Small steps lead to big changes!",
-                "🎯 Stay committed to your health!"
-            ],
-            'evening': [
-                "⚠️ Tomorrow is a fresh start! Let's plan!",
-                "💪 I believe in you! Try again tomorrow!",
-                "🎯 Let's set a goal for tomorrow!"
-            ]
-        }
-    
-    import random
-    return random.choice(messages.get(time_of_day, messages['morning']))
-
-def update_mascot_mood(adherence):
-    """Update mascot mood based on adherence"""
-    if adherence >= 90:
-        st.session_state.turtle_mood = 'excited'
-    elif adherence >= 70:
-        st.session_state.turtle_mood = 'happy'
-    elif adherence >= 50:
-        st.session_state.turtle_mood = 'neutral'
-    else:
-        st.session_state.turtle_mood = 'worried'
-
-def check_upcoming_reminders(doses):
-    """Check for upcoming doses and show reminders"""
-    now = datetime.now()
-    current_time = now.strftime("%H:%M")
-    
-    for dose in doses[:3]:
-        dose_time = dose['time']
-        try:
-            med_datetime = datetime.strptime(dose_time, "%H:%M")
-            time_diff = (med_datetime - now).total_seconds() / 60 
-            
-            if 0 < time_diff <= 30:
-                return True, dose, int(time_diff)
-        except:
-            continue
-    return False, None, 0
-
-def check_due_doses(doses):
-    """Check for doses that are due now"""
-    now = datetime.now()
-    current_time = now.strftime("%H:%M")
-    
-    due_doses = []
-    for dose in doses:
-        if not dose['taken']:
-            dose_time = dose['time']
-            
-            try:
-                dose_datetime = datetime.strptime(dose_time, "%H:%M")
-                time_diff = abs((now - dose_datetime).total_seconds() / 60)
-                
-                if time_diff <= 5:
-                    due_doses.append(dose)
-            except:
-                continue
-    
-    return due_doses
-
-def get_mascot_emoji(mood):
-    """Get emoji mascot based on mood"""
-    mascot_emojis = {
+def get_turtle_emoji(mood):
+    """Get turtle emoji based on mood"""
+    turtle_emojis = {
         'happy': '🐢😊',
+        'sad': '🐢😢',
         'excited': '🐢🎉',
-        'neutral': '🐢😐',
-        'worried': '🐢😟'
+        'sleeping': '🐢😴',
+        'thinking': '🐢🤔',
+        'celebrating': '🐢🎊'
     }
-    return mascot_emojis.get(mood, '🐢')
+    return turtle_emojis.get(mood, '🐢')
 
 def get_severity_color(severity):
     """Get color for severity level"""
@@ -1178,7 +272,7 @@ def generate_patient_code():
 def initialize_session_state():
     """Initialize all session state variables"""
     if 'page' not in st.session_state:
-        st.session_state.page = 'patient_login'
+        st.session_state.page = 'account_type_selection'
     if 'user_profile' not in st.session_state:
         st.session_state.user_profile = None
     if 'medications' not in st.session_state:
@@ -1203,16 +297,10 @@ def initialize_session_state():
         st.session_state.adherence_history = []
     if 'connected_patients' not in st.session_state:
         st.session_state.connected_patients = []
-    if 'editing_medication' not in st.session_state:
-        st.session_state.editing_medication = None
-    if 'sound_enabled' not in st.session_state:
-        st.session_state.sound_enabled = True
-    if 'last_reminder_check' not in st.session_state:
-        st.session_state.last_reminder_check = datetime.now()
-    if 'show_celebration' not in st.session_state:
-        st.session_state.show_celebration = False
-    if 'previous_adherence' not in st.session_state:
-        st.session_state.previous_adherence = 0
+
+# ============================================
+# DATABASE FUNCTIONS
+# ============================================
 
 def save_user_data():
     """Save user data to SQLite database"""
@@ -1225,6 +313,7 @@ def save_user_data():
         
         username = st.session_state.user_profile.get('username')
         
+        # Update or insert user
         c.execute('''INSERT OR REPLACE INTO users 
                      (username, name, age, email, password, user_type, phone, relationship, experience, notes, created_at)
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
@@ -1240,28 +329,24 @@ def save_user_data():
                    st.session_state.user_profile.get('notes', ''),
                    datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
         
+        # Save diseases
         c.execute('DELETE FROM diseases WHERE username = ?', (username,))
         for disease in st.session_state.user_profile.get('diseases', []):
             c.execute('INSERT INTO diseases (username, name, type, notes) VALUES (?, ?, ?, ?)',
                      (username, disease.get('name'), disease.get('type'), disease.get('notes', '')))
         
+        # Save medications
         c.execute('DELETE FROM medications WHERE username = ?', (username,))
         for med in st.session_state.medications:
             c.execute('''INSERT INTO medications 
-                         (username, name, dosage_type, dosage_amount, frequency, time, reminder_times, color, instructions, taken_doses, created_at)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                     (username,
-                      med.get('name'),
-                      med.get('dosageType'),
-                      med.get('dosageAmount'),
-                      med.get('frequency'),
-                      med.get('time'),
-                      json.dumps(med.get('reminder_times', [med.get('time')])),
-                      med.get('color'),
-                      med.get('instructions', ''),
-                      json.dumps(med.get('taken_doses', [])),
+                         (username, name, dosage_type, dosage_amount, frequency, time, color, instructions, taken_today, created_at)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                     (username, med.get('name'), med.get('dosageType'), med.get('dosageAmount'),
+                      med.get('frequency'), med.get('time'), med.get('color'),
+                      med.get('instructions', ''), int(med.get('taken_today', False)),
                       med.get('created_at', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))))
         
+        # Save appointments
         c.execute('DELETE FROM appointments WHERE username = ?', (username,))
         for appt in st.session_state.appointments:
             c.execute('''INSERT INTO appointments 
@@ -1271,6 +356,7 @@ def save_user_data():
                       appt.get('time'), appt.get('location', ''), appt.get('phone', ''),
                       appt.get('notes', ''), appt.get('created_at', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))))
         
+        # Save side effects
         c.execute('DELETE FROM side_effects WHERE username = ?', (username,))
         for effect in st.session_state.side_effects:
             c.execute('''INSERT INTO side_effects 
@@ -1293,6 +379,7 @@ def load_user_data(username):
         conn = get_db_connection()
         c = conn.cursor()
         
+        # Load user profile
         c.execute('SELECT * FROM users WHERE username = ?', (username,))
         user = c.fetchone()
         
@@ -1314,6 +401,7 @@ def load_user_data(username):
             'diseases': []
         }
         
+        # Load diseases
         c.execute('SELECT * FROM diseases WHERE username = ?', (username,))
         diseases = c.fetchall()
         for disease in diseases:
@@ -1324,6 +412,7 @@ def load_user_data(username):
                 'notes': disease[4]
             })
         
+        # Load medications
         c.execute('SELECT * FROM medications WHERE username = ?', (username,))
         meds = c.fetchall()
         st.session_state.medications = []
@@ -1335,13 +424,13 @@ def load_user_data(username):
                 'dosageAmount': med[4],
                 'frequency': med[5],
                 'time': med[6],
-                'reminder_times': json.loads(med[7]) if med[7] else [med[6]],
-                'color': med[8],
-                'instructions': med[9],
-                'taken_doses': json.loads(med[10]) if med[10] else [],
-                'created_at': med[11]
+                'color': med[7],
+                'instructions': med[8],
+                'taken_today': bool(med[9]),
+                'created_at': med[10]
             })
         
+        # Load appointments
         c.execute('SELECT * FROM appointments WHERE username = ?', (username,))
         appts = c.fetchall()
         st.session_state.appointments = []
@@ -1358,6 +447,7 @@ def load_user_data(username):
                 'created_at': appt[9]
             })
         
+        # Load side effects
         c.execute('SELECT * FROM side_effects WHERE username = ?', (username,))
         effects = c.fetchall()
         st.session_state.side_effects = []
@@ -1372,6 +462,7 @@ def load_user_data(username):
                 'reported_at': effect[7]
             })
         
+        # Load medication history
         c.execute('SELECT * FROM medication_history WHERE username = ?', (username,))
         hist = c.fetchall()
         st.session_state.medication_history = []
@@ -1383,6 +474,7 @@ def load_user_data(username):
                 'date': h[5]
             })
         
+        # Load adherence history
         c.execute('SELECT * FROM adherence_history WHERE username = ?', (username,))
         adh = c.fetchall()
         st.session_state.adherence_history = []
@@ -1408,7 +500,7 @@ def user_exists(username):
     conn.close()
     return result is not None
 
-def update_medication_history(medication_id, action='taken', dose_time=None):
+def update_medication_history(medication_id, action='taken'):
     """Update medication history"""
     if not st.session_state.user_profile:
         return
@@ -1435,13 +527,16 @@ def update_adherence_history():
     today = datetime.now().strftime("%Y-%m-%d")
     
     if st.session_state.medications:
-        adherence = calculate_adherence(st.session_state.medications)
+        taken = sum(1 for med in st.session_state.medications if med.get('taken_today', False))
+        total = len(st.session_state.medications)
+        adherence = (taken / total * 100) if total > 0 else 0
     else:
         adherence = 0
     
     conn = get_db_connection()
     c = conn.cursor()
     
+    # Check if today's entry exists
     c.execute('SELECT id FROM adherence_history WHERE username = ? AND date = ?', (username, today))
     existing = c.fetchone()
     
@@ -1468,329 +563,178 @@ def clear_session_data():
     st.session_state.turtle_mood = 'happy'
     st.session_state.signup_step = 1
     st.session_state.signup_data = {}
-    st.session_state.editing_medication = None
-    st.session_state.show_celebration = False
-    st.session_state.previous_adherence = 0
 
-# ============ WOW DASHBOARD OVERVIEW ============
-def dashboard_overview_tab_wow(age_category):
-    """STUNNING WOW dashboard with glassmorphism and modern animations"""
-    current_date, current_time = get_current_datetime_display()
-    
-    # WOW HEADING
-    st.markdown(f"""
-    <div style="text-align: center; margin-bottom: 30px;">
-        <h1 class="wow-heading">✨ YOUR HEALTH JOURNEY ✨</h1>
-        <p class="wow-text-muted" style="font-size: 20px;">{current_date} • {current_time}</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Get all individual doses
-    all_doses = []
-    for med in st.session_state.medications:
-        all_doses.extend(get_all_doses_for_medication(med))
-    
-    # Categorize doses
-    missed_doses, upcoming_doses, taken_doses = categorize_doses_by_status(all_doses)
-    
-    # WOW FILTER TABS
-    st.markdown("""
-    <div class="filter-tabs-wow">
-        <button class="filter-tab-wow active" onclick="setFilter('All')">All</button>
-        <button class="filter-tab-wow" onclick="setFilter('Missed')">Missed</button>
-        <button class="filter-tab-wow" onclick="setFilter('Upcoming')">Upcoming</button>
-        <button class="filter-tab-wow" onclick="setFilter('Taken')">Taken</button>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    filter_tab = st.radio(
-        "View medications",
-        ["All", "Missed", "Upcoming", "Taken"],
-        horizontal=True,
-        label_visibility="collapsed"
-    )
-    
-    # Filter doses based on selection
-    if filter_tab == "All":
-        doses_to_show = all_doses
-    elif filter_tab == "Missed":
-        doses_to_show = missed_doses
-    elif filter_tab == "Upcoming":
-        doses_to_show = upcoming_doses
-    elif filter_tab == "Taken":
-        doses_to_show = taken_doses
-    
-    # WOW STATISTICS CARDS
-    total_meds = len(st.session_state.medications)
-    taken_today = len(taken_doses)
-    total_doses_count = len(all_doses)
-    adherence = calculate_adherence(st.session_state.medications)
-    
-    update_mascot_mood(adherence)
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.markdown(f"""
-        <div class="stat-card-wow">
-            <div class="stat-number-wow">{total_meds}</div>
-            <div class="stat-label-wow">Medications</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown(f"""
-        <div class="stat-card-wow">
-            <div class="stat-number-wow">{taken_today}</div>
-            <div class="stat-label-wow">Taken Today</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown(f"""
-        <div class="stat-card-wow">
-            <div class="stat-number-wow">{total_doses_count}</div>
-            <div class="stat-label-wow">Total Doses</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col4:
-        adherence_color = "#10b981" if adherence >= 70 else "#f59e0b" if adherence >= 50 else "#ef4444"
-        st.markdown(f"""
-        <div class="stat-card-wow">
-            <div class="stat-number-wow" style="background: linear-gradient(135deg, {adherence_color}, {adherence_color}88); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">{adherence:.0f}%</div>
-            <div class="stat-label-wow">Adherence</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown("<div class='animated-separator'></div>", unsafe_allow_html=True)
-    
-    # WOW MASCOT SECTION
-    time_of_day = get_time_of_day().lower().replace('👋 ', '')
-    mascot_message = get_mascot_message(adherence, time_of_day)
-    mascot_emoji = get_mascot_emoji(st.session_state.turtle_mood)
-    
-    st.markdown(f"""
-    <div class="glass-card" style="text-align: center; padding: 40px;">
-        <div class="mascot-wow">{mascot_emoji}</div>
-        <p class="wow-text" style="font-size: 24px; font-weight: 700; margin-top: 20px;">
-            {mascot_message}
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Sound Toggle
-    col_sound_left, col_sound_right = st.columns([4, 1])
-    with col_sound_right:
-        if st.button("🔊" if st.session_state.sound_enabled else "🔇", use_container_width=True):
-            st.session_state.sound_enabled = not st.session_state.sound_enabled
-            st.rerun()
-    
-    st.markdown("<div class='animated-separator'></div>", unsafe_allow_html=True)
-    
-    # WOW DUE DOSE REMINDER
-    due_doses = check_due_doses(all_doses)
-    if due_doses:
-        if st.session_state.sound_enabled:
-            play_reminder_sound()
-        st.markdown("<div class='reminder-due-banner-wow'>", unsafe_allow_html=True)
-        st.markdown(f"<h3 style='color: #991b1b; margin-top: 0; text-align: center; font-size: 28px; font-weight: 800;'>🔔 MEDICATION DUE NOW!</h3>", unsafe_allow_html=True)
-        for dose in due_doses:
-            color_hex = get_medication_color_hex(dose.get('color', 'blue'))
-            st.markdown(f"""
-            <div class="dose-card missed">
-                <div style='display: flex; align-items: center; gap: 20px;'>
-                    <div style='width: 20px; height: 20px; border-radius: 50%; background-color: {color_hex}; box-shadow: 0 0 20px {color_hex};'></div>
-                    <div class="wow-text">
-                        <strong style='font-size: 24px;'>{dose['medication_name']}</strong> <span style='font-size: 20px;'>({dose['dosage_amount']})</span>
-                        <br><span style='font-size: 18px; opacity: 0.9;'>⏰ Due Now: {format_time(dose['time'])}</span>
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            if st.button("✓ Take Now", key=f"take_due_{dose['medication_id']}_{dose['dose_index']}", use_container_width=True):
-                for med in st.session_state.medications:
-                    if med['id'] == dose['medication_id']:
-                        # Add this specific dose to taken_doses
-                        today = datetime.now().strftime("%Y-%m-%d")
-                        new_taken = {
-                            'date': today,
-                            'time': dose['time']
-                        }
-                        if 'taken_doses' not in med:
-                            med['taken_doses'] = []
-                        med['taken_doses'].append(new_taken)
-                        
-                        update_medication_history(med['id'], 'taken', dose['time'])
-                        update_adherence_history()
-                        save_user_data()
-                        
-                        new_adherence = calculate_adherence(st.session_state.medications)
-                        if new_adherence >= 100 and st.session_state.previous_adherence < 100:
-                            st.session_state.previous_adherence = new_adherence
-                            show_100_percent_adherence_animation()
-                        st.rerun()
-        st.markdown("</div>", unsafe_allow_html=True)
-    else:
-        st.markdown(f"""
-        <div class="glass-card" style="text-align: center; border-left: 6px solid #10b981;">
-            <p class="wow-text" style="font-size: 22px; font-weight: 700;">🎉 No medications due right now!</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # WOW UPCOMING REMINDER
-    has_upcoming, upcoming_dose, time_to_take = check_upcoming_reminders(upcoming_doses)
-    if has_upcoming and time_to_take > 0:
-        st.markdown("<div class='reminder-banner-wow'>", unsafe_allow_html=True)
-        st.markdown(f"<h3 style='color: #92400e; margin-top: 0; text-align: center; font-size: 26px; font-weight: 800;'>⏰ Upcoming Reminder</h3>", unsafe_allow_html=True)
-        st.markdown(f"""
-        <p class="wow-text" style="text-align: center; font-size: 20px; margin: 20px 0;">
-            <strong style='font-size: 24px;'>{upcoming_dose['medication_name']}</strong> ({upcoming_dose['dosage_amount']}) 
-            is due in <strong style='font-size: 28px; color: #92400e;'>{time_to_take} minutes</strong> at {format_time(upcoming_dose['time'])}
-        </p>
-        """, unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    st.markdown("<div class='animated-separator'></div>", unsafe_allow_html=True)
-    
-    # WOW DOSE DISPLAY
-    doses_to_show.sort(key=lambda x: x['time'])
-    
-    # Group doses by medication
-    from collections import defaultdict
-    doses_by_med = defaultdict(list)
-    for dose in doses_to_show:
-        doses_by_med[dose['medication_id']].append(dose)
-    
-    for med_id, med_doses in doses_by_med.items():
-        # Find the medication
-        med = next((m for m in st.session_state.medications if m['id'] == med_id), None)
-        if not med:
-            continue
-        
-        # Determine medication status based on doses
-        all_taken = all(d['taken'] for d in med_doses)
-        any_taken = any(d['taken'] for d in med_doses)
-        
-        if all_taken:
-            status_class = "taken"
-            section_header = "✅ Taken Medications"
-            section_class = "section-taken-wow"
-        elif any_taken:
-            # Partially taken
-            remaining = [d for d in med_doses if not d['taken']]
-            if remaining and remaining[0]['time'] >= datetime.now().strftime("%H:%M"):
-                status_class = "upcoming"
-                section_header = "⏰ Upcoming Medications"
-                section_class = "section-upcoming-wow"
-            else:
-                status_class = "missed"
-                section_header = "❌ Missed Medications"
-                section_class = "section-missed-wow"
-        elif med_doses and med_doses[0]['time'] >= datetime.now().strftime("%H:%M"):
-            status_class = "upcoming"
-            section_header = "⏰ Upcoming Medications"
-            section_class = "section-upcoming-wow"
-        else:
-            status_class = "missed"
-            section_header = "❌ Missed Medications"
-            section_class = "section-missed-wow"
-        
-        # Section Header
-        st.markdown(f"<div class='section-header-wow {section_class}'>{section_header}</div>", unsafe_allow_html=True)
-        
-        # Show each dose separately
-        for dose in med_doses:
-            color_hex = get_medication_color_hex(med.get('color', 'blue'))
-            dose_status_class = "taken" if dose['taken'] else "missed" if dose['time'] < datetime.now().strftime("%H:%M") else "upcoming"
-            
-            # Calculate time remaining
-            time_remaining = ""
-            if not dose['taken'] and dose['time'] >= datetime.now().strftime("%H:%M"):
-                try:
-                    now = datetime.now()
-                    dose_datetime = datetime.strptime(dose['time'], "%H:%M").replace(
-                        year=now.year, month=now.month, day=now.day
-                    )
-                    time_diff_minutes = int((dose_datetime - now).total_seconds() / 60)
-                    
-                    if time_diff_minutes == 1:
-                        time_remaining = "in 1 minute"
-                    else:
-                        time_remaining = f"in {time_diff_minutes} minutes"
-                except:
-                    time_remaining = "Today"
-            elif dose['taken']:
-                time_remaining = f"Taken at {format_time(dose['time'])}"
-            else:
-                time_remaining = f"Was due at {format_time(dose['time'])}"
-            
-            st.markdown(f"""
-            <div class="dose-card {dose_status_class}">
-                <div style='display: flex; align-items: center; gap: 24px;'>
-                    <div style='width: 24px; height: 24px; border-radius: 50%; background-color: {color_hex}; box-shadow: 0 0 24px {color_hex}; flex-shrink: 0;'></div>
-                    <div class="wow-text">
-                        <strong style='font-size: 26px;'>{dose['medication_name']}</strong> <span style='font-size: 22px; opacity: 0.9;'>({dose['dosage_amount']})</span>
-                        <br><span style='font-size: 20px; opacity: 0.85;'>⏰ {time_remaining}</span>
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            col1, col2 = st.columns([4, 1])
-            with col2:
-                if dose['taken']:
-                    if st.button("↩️ Undo", key=f"undo_dose_{dose['medication_id']}_{dose['dose_index']}", use_container_width=True):
-                        for m in st.session_state.medications:
-                            if m['id'] == dose['medication_id']:
-                                today = datetime.now().strftime("%Y-%m-%d")
-                                m['taken_doses'] = [t for t in m.get('taken_doses', []) if not (t.get('date') == today and t.get('time') == dose['time'])]
-                                update_adherence_history()
-                                save_user_data()
-                                st.rerun()
-                else:
-                    if st.button("✓ Take", key=f"take_dose_{dose['medication_id']}_{dose['dose_index']}", use_container_width=True):
-                        for m in st.session_state.medications:
-                            if m['id'] == dose['medication_id']:
-                                today = datetime.now().strftime("%Y-%m-%d")
-                                new_taken = {
-                                    'date': today,
-                                    'time': dose['time']
-                                }
-                                if 'taken_doses' not in m:
-                                    m['taken_doses'] = []
-                                m['taken_doses'].append(new_taken)
-                                
-                                update_medication_history(m['id'], 'taken', dose['time'])
-                                play_notification_sound()
-                                update_adherence_history()
-                                save_user_data()
-                                
-                                new_adherence = calculate_adherence(st.session_state.medications)
-                                if new_adherence >= 100 and st.session_state.previous_adherence < 100:
-                                    st.session_state.previous_adherence = new_adherence
-                                    show_100_percent_adherence_animation()
-                                st.rerun()
-    
-    st.markdown("<div class='animated-separator'></div>", unsafe_allow_html=True)
-    
-    # WOW CHARTS
-    st.markdown("<h2 class='wow-heading' style='font-size: 36px; margin-top: 40px;'>📊 Your Progress</h2>", unsafe_allow_html=True)
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("<div class='chart-container-wow'>", unsafe_allow_html=True)
-        st.plotly_chart(create_medication_status_donut(st.session_state.medications), use_container_width=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("<div class='chart-container-wow'>", unsafe_allow_html=True)
-        st.plotly_chart(create_medication_pie_chart(st.session_state.medications, age_category), use_container_width=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+# ============================================
+# CSS STYLES
+# ============================================
 
-# Keep all chart functions from original
+def inject_custom_css():
+    """Inject custom CSS into Streamlit app"""
+    css = """
+    <style>
+    .stApp {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    h1 {
+        font-weight: 800 !important;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    
+    .medication-card {
+        background: white;
+        border-radius: 16px;
+        padding: 20px;
+        margin: 10px 0;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+        border-left: 4px solid #667eea;
+    }
+    
+    .medication-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 12px 24px rgba(0,0,0,0.15);
+    }
+    
+    .stat-card {
+        background: white;
+        border-radius: 20px;
+        padding: 30px 24px;
+        text-align: center;
+        box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+        border-top: 4px solid #667eea;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 16px 32px rgba(0,0,0,0.15);
+    }
+    
+    .stat-number {
+        font-size: 56px;
+        font-weight: 900;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        line-height: 1.2;
+        margin-bottom: 8px;
+    }
+    
+    .stat-label {
+        font-size: 16px;
+        color: #6b7280;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .auth-card {
+        background: white;
+        border-radius: 24px;
+        padding: 40px;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        max-width: 500px;
+        margin: 0 auto;
+        border: 1px solid rgba(255,255,255,0.2);
+    }
+    
+    .stButton > button {
+        border-radius: 12px !important;
+        font-weight: 600 !important;
+        padding: 12px 24px !important;
+        border: none !important;
+        transition: all 0.3s ease !important;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 16px rgba(0,0,0,0.2) !important;
+    }
+    
+    .status-taken {
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: white;
+        padding: 6px 16px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 700;
+        display: inline-block;
+        box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+    }
+    
+    .status-missed {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+        color: white;
+        padding: 6px 16px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 700;
+        display: inline-block;
+        box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+    }
+    
+    .status-upcoming {
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        color: white;
+        padding: 6px 16px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 700;
+        display: inline-block;
+        box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
+    }
+    
+    .status-pending {
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        color: white;
+        padding: 6px 16px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 700;
+        display: inline-block;
+        box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+    }
+    
+    @keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-20px); }
+    }
+    
+    .turtle-container {
+        animation: float 3s ease-in-out infinite;
+    }
+    
+    .stProgress > div > div > div {
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%) !important;
+        border-radius: 10px !important;
+    }
+    
+    .color-dot {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    </style>
+    """
+    return css
+
+# ============================================
+# CHART FUNCTIONS
+# ============================================
+
 def create_adherence_line_chart(adherence_history, age_category='adult'):
     """Create line chart showing adherence over time"""
     if not adherence_history:
@@ -1799,7 +743,7 @@ def create_adherence_line_chart(adherence_history, age_category='adult'):
             text="No adherence data available yet.<br>Start tracking your medications!",
             xref="paper", yref="paper",
             x=0.5, y=0.5, showarrow=False,
-            font=dict(size=16, color="#1f2937")
+            font=dict(size=16, color="#6b7280")
         )
         fig.update_layout(height=400, xaxis=dict(visible=False), yaxis=dict(visible=False),
                          plot_bgcolor='white', paper_bgcolor='white')
@@ -2018,7 +962,400 @@ def create_weekly_heatmap(medication_history):
     )
     return fig
 
-# Main app with WOW dashboard
+# ============================================
+# AUTHENTICATION PAGES
+# ============================================
+
+def account_type_selection_page():
+    """Landing page for selecting account type"""
+    st.markdown("<h1 style='text-align: center; margin-top: 50px;'>🏥 Welcome to MedTimer</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; font-size: 20px; color: #fff; margin-bottom: 50px;'>Your Comprehensive Medication Management Solution</p>", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        st.markdown("<div class='auth-card'>", unsafe_allow_html=True)
+        st.markdown("<h2 style='text-align: center; margin-bottom: 30px;'>Choose Account Type</h2>", unsafe_allow_html=True)
+        
+        col_a, col_b = st.columns(2)
+        
+        with col_a:
+            if st.button("👤 Patient", key="patient_btn", use_container_width=True):
+                st.session_state.account_type = 'patient'
+                st.session_state.page = 'patient_login'
+                st.rerun()
+        
+        with col_b:
+            if st.button("🤝 Caregiver", key="caregiver_btn", use_container_width=True):
+                st.session_state.account_type = 'caregiver'
+                st.session_state.page = 'caregiver_login'
+                st.rerun()
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+
+def patient_login_page():
+    """Patient login page"""
+    if st.button("← Back"):
+        st.session_state.page = 'account_type_selection'
+        st.rerun()
+    
+    st.markdown("<h1 style='text-align: center; margin-top: 20px;'>💊 Patient Login</h1>", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        st.markdown("<div class='auth-card'>", unsafe_allow_html=True)
+        
+        tab1, tab2 = st.tabs(["🔒 Password", "📧 Email"])
+        
+        with tab1:
+            st.markdown("### Username & Password Login")
+            username = st.text_input("Username", key="login_username")
+            password = st.text_input("Password", type="password", key="login_password")
+            
+            if st.button("✨ Sign In", use_container_width=True):
+                if username and password:
+                    if load_user_data(username):
+                        st.success(f"Welcome back, {st.session_state.user_profile['name']}!")
+                        st.session_state.page = 'patient_dashboard'
+                        st.rerun()
+                    else:
+                        st.error("User not found. Please sign up first!")
+                else:
+                    st.warning("Please enter username and password")
+        
+        with tab2:
+            st.markdown("### Email Verification Login")
+            email = st.text_input("Email Address", key="login_email")
+            
+            if st.button("Send Login Code", use_container_width=True):
+                if email:
+                    st.info(f"Demo: Verification code '123456' sent to {email}")
+                    
+            code = st.text_input("Enter 6-Digit Code", max_chars=6, key="verification_code")
+            
+            if st.button("Verify & Login", use_container_width=True):
+                if code == "123456":
+                    st.success("Login successful!")
+                    st.session_state.page = 'patient_dashboard'
+                    st.rerun()
+        
+        st.markdown("<hr>", unsafe_allow_html=True)
+        
+        if st.button("Don't have an account? Sign Up", use_container_width=True):
+            st.session_state.page = 'patient_signup'
+            st.rerun()
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+
+def caregiver_login_page():
+    """Caregiver login page"""
+    if st.button("← Back"):
+        st.session_state.page = 'account_type_selection'
+        st.rerun()
+    
+    st.markdown("<h1 style='text-align: center; margin-top: 20px;'>🤝 Caregiver Login</h1>", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        st.markdown("<div class='auth-card' style='border: 3px solid #10b981;'>", unsafe_allow_html=True)
+        
+        tab1, tab2 = st.tabs(["🔒 Password", "🔑 Patient Code"])
+        
+        with tab1:
+            st.markdown("### Username & Password")
+            username = st.text_input("Caregiver Username", key="caregiver_username")
+            password = st.text_input("Password", type="password", key="caregiver_password")
+            
+            if st.button("🚀 Sign In", use_container_width=True):
+                if username and password:
+                    if load_user_data(username):
+                        st.success(f"Welcome back, {st.session_state.user_profile['name']}!")
+                        st.session_state.page = 'caregiver_dashboard'
+                        st.rerun()
+                    else:
+                        st.error("Caregiver not found. Please sign up first!")
+                else:
+                    st.warning("Please enter username and password")
+        
+        with tab2:
+            st.markdown("### Connect to Patient")
+            caregiver_username = st.text_input("Your Username", key="connect_username")
+            patient_code = st.text_input("Patient Access Code", max_chars=6, key="patient_code")
+            
+            if st.button("🔗 Connect", use_container_width=True):
+                if caregiver_username and patient_code:
+                    st.info(f"Demo: Connecting {caregiver_username} to patient with code {patient_code}")
+                    if load_user_data(caregiver_username):
+                        st.session_state.page = 'caregiver_dashboard'
+                        st.rerun()
+        
+        st.markdown("<hr>", unsafe_allow_html=True)
+        
+        if st.button("Don't have an account? Sign Up", use_container_width=True):
+            st.session_state.page = 'caregiver_signup'
+            st.rerun()
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+
+# ============================================
+# SIGNUP PAGES
+# ============================================
+
+def patient_signup_page():
+    """Multi-step patient signup page"""
+    if st.button("← Back"):
+        if st.session_state.signup_step > 1:
+            st.session_state.signup_step -= 1
+            st.rerun()
+        else:
+            st.session_state.page = 'patient_login'
+            st.session_state.signup_step = 1
+            st.session_state.signup_data = {}
+            st.rerun()
+    
+    st.markdown("<h1 style='text-align: center;'>📝 Create Patient Account</h1>", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        st.markdown("<div class='auth-card'>", unsafe_allow_html=True)
+        
+        progress = st.session_state.signup_step / 5
+        st.progress(progress)
+        st.markdown(f"<p style='text-align: center;'>Step {st.session_state.signup_step} of 5</p>", unsafe_allow_html=True)
+        
+        if st.session_state.signup_step == 1:
+            st.markdown("### 👤 Basic Information")
+            name = st.text_input("Full Name", value=st.session_state.signup_data.get('name', ''))
+            username = st.text_input("Username", value=st.session_state.signup_data.get('username', ''))
+            age = st.number_input("Age", min_value=1, max_value=120, value=st.session_state.signup_data.get('age', 25))
+            password = st.text_input("Password", type="password", value=st.session_state.signup_data.get('password', ''))
+            
+            if st.button("Continue →", use_container_width=True):
+                if name and username and password:
+                    if user_exists(username):
+                        st.error("Username already exists! Please choose another.")
+                    else:
+                        st.session_state.signup_data['name'] = name
+                        st.session_state.signup_data['username'] = username
+                        st.session_state.signup_data['age'] = age
+                        st.session_state.signup_data['password'] = password
+                        st.session_state.signup_step = 2
+                        st.rerun()
+                else:
+                    st.warning("Please fill all required fields")
+        
+        elif st.session_state.signup_step == 2:
+            st.markdown("### 📧 Email Verification (Optional)")
+            st.info("Get medication reminders via email. You can skip this step.")
+            
+            email = st.text_input("Email Address (optional)", value=st.session_state.signup_data.get('email', ''))
+            
+            col_a, col_b = st.columns(2)
+            with col_a:
+                if st.button("Skip", use_container_width=True):
+                    st.session_state.signup_data['email'] = ''
+                    st.session_state.signup_step = 3
+                    st.rerun()
+            
+            with col_b:
+                if st.button("Continue →", use_container_width=True):
+                    st.session_state.signup_data['email'] = email
+                    st.session_state.signup_step = 3
+                    st.rerun()
+        
+        elif st.session_state.signup_step == 3:
+            st.markdown("### 🏥 Your Health Conditions")
+            
+            if 'diseases' not in st.session_state.signup_data:
+                st.session_state.signup_data['diseases'] = []
+            
+            disease_name = st.text_input("Disease/Condition Name", key="disease_name_input")
+            disease_type = st.selectbox("Type", ["Chronic", "Acute", "Preventive", "Other"], key="disease_type_select")
+            disease_notes = st.text_area("Notes (optional)", key="disease_notes_input")
+            
+            if st.button("➕ Add Disease"):
+                if disease_name:
+                    st.session_state.signup_data['diseases'].append({
+                        'id': str(len(st.session_state.signup_data['diseases']) + 1),
+                        'name': disease_name,
+                        'type': disease_type.lower(),
+                        'notes': disease_notes
+                    })
+                    st.rerun()
+            
+            if st.session_state.signup_data['diseases']:
+                st.markdown("**Added Conditions:**")
+                for i, disease in enumerate(st.session_state.signup_data['diseases']):
+                    col_a, col_b = st.columns([4, 1])
+                    with col_a:
+                        st.markdown(f"- {disease['name']} ({disease['type']})")
+                    with col_b:
+                        if st.button("🗑️", key=f"del_disease_{i}"):
+                            st.session_state.signup_data['diseases'].pop(i)
+                            st.rerun()
+            
+            if st.button("Continue →", use_container_width=True, key="continue_from_diseases"):
+                st.session_state.signup_step = 4
+                st.rerun()
+        
+        elif st.session_state.signup_step == 4:
+            st.markdown("### 💊 Your Medications")
+            
+            if 'medications' not in st.session_state.signup_data:
+                st.session_state.signup_data['medications'] = []
+            
+            med_name = st.text_input("Medication Name", key="med_name_input")
+            col_a, col_b = st.columns(2)
+            with col_a:
+                dosage_type = st.selectbox("Type", ["Pill", "Liquid", "Injection", "Other"], key="dosage_type_select")
+            with col_b:
+                dosage_amount = st.text_input("Dosage", placeholder="e.g., 500mg", key="dosage_amount_input")
+            
+            frequency = st.selectbox("Frequency", [
+                "Once daily", "Twice daily", "Three times daily", 
+                "Every 4 hours", "Every 6 hours", "Every 8 hours",
+                "Every 12 hours", "As needed", "Weekly", "Monthly"
+            ], key="frequency_select")
+            
+            time = st.time_input("Time", value=datetime.strptime("09:00", "%H:%M").time(), key="time_input")
+            color = st.selectbox("Color", ["Blue", "Green", "Purple", "Pink", "Orange", "Red", "Yellow", "Indigo"], key="color_select")
+            
+            if st.button("➕ Add Medication"):
+                if med_name and dosage_amount:
+                    st.session_state.signup_data['medications'].append({
+                        'id': len(st.session_state.signup_data['medications']) + 1,
+                        'name': med_name,
+                        'dosageType': dosage_type.lower(),
+                        'dosageAmount': dosage_amount,
+                        'frequency': frequency.lower().replace(' ', '-'),
+                        'time': time.strftime("%H:%M"),
+                        'color': color.lower(),
+                        'taken_today': False
+                    })
+                    st.rerun()
+            
+            if st.session_state.signup_data['medications']:
+                st.markdown("**Added Medications:**")
+                for i, med in enumerate(st.session_state.signup_data['medications']):
+                    col_a, col_b = st.columns([4, 1])
+                    with col_a:
+                        st.markdown(f"- {med['name']} ({med['dosageAmount']}) at {med['time']}")
+                    with col_b:
+                        if st.button("🗑️", key=f"del_med_{i}"):
+                            st.session_state.signup_data['medications'].pop(i)
+                            st.rerun()
+            
+            col_skip, col_cont = st.columns(2)
+            with col_skip:
+                if st.button("Skip", use_container_width=True, key="skip_medications"):
+                    st.session_state.signup_step = 5
+                    st.rerun()
+            with col_cont:
+                if st.button("Continue →", use_container_width=True, key="continue_from_medications"):
+                    st.session_state.signup_step = 5
+                    st.rerun()
+        
+        elif st.session_state.signup_step == 5:
+            st.markdown("### ✅ Review Your Information")
+            
+            st.markdown(f"**Name:** {st.session_state.signup_data.get('name')}")
+            st.markdown(f"**Username:** {st.session_state.signup_data.get('username')}")
+            st.markdown(f"**Age:** {st.session_state.signup_data.get('age')}")
+            
+            if st.session_state.signup_data.get('email'):
+                st.markdown(f"**Email:** {st.session_state.signup_data.get('email')}")
+            
+            st.markdown(f"**Diseases:** {len(st.session_state.signup_data.get('diseases', []))}")
+            st.markdown(f"**Medications:** {len(st.session_state.signup_data.get('medications', []))}")
+            
+            if st.button("🎉 Complete Registration", use_container_width=True):
+                st.session_state.user_profile = {
+                    'name': st.session_state.signup_data.get('name'),
+                    'username': st.session_state.signup_data.get('username'),
+                    'age': st.session_state.signup_data.get('age'),
+                    'email': st.session_state.signup_data.get('email', ''),
+                    'password': st.session_state.signup_data.get('password'),
+                    'userType': 'patient',
+                    'diseases': st.session_state.signup_data.get('diseases', []),
+                }
+                
+                st.session_state.medications = st.session_state.signup_data.get('medications', [])
+                save_user_data()
+                
+                st.session_state.signup_step = 1
+                st.session_state.signup_data = {}
+                
+                st.success("Registration complete! Welcome to MedTimer!")
+                st.session_state.page = 'patient_dashboard'
+                st.rerun()
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+
+def caregiver_signup_page():
+    """Caregiver signup page"""
+    if st.button("← Back"):
+        st.session_state.page = 'caregiver_login'
+        st.rerun()
+    
+    st.markdown("<h1 style='text-align: center;'>🤝 Caregiver Registration</h1>", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        st.markdown("<div class='auth-card' style='border: 3px solid #10b981;'>", unsafe_allow_html=True)
+        
+        st.markdown("### Step 1: Basic Information")
+        name = st.text_input("Full Name", key="cg_name")
+        username = st.text_input("Username", key="cg_username")
+        phone = st.text_input("Phone Number (optional)", key="cg_phone")
+        password = st.text_input("Password", type="password", key="cg_password")
+        
+        st.markdown("### Step 2: Professional Details")
+        relationship = st.selectbox("Your Role", [
+            "Family Member", "Professional Caregiver", "Nurse",
+            "Home Health Aide", "Friend", "Other"
+        ], key="cg_relationship")
+        
+        experience = st.selectbox("Caregiving Experience", [
+            "New to caregiving", "Less than 1 year", "1-3 years",
+            "3-5 years", "5+ years"
+        ], key="cg_experience")
+        
+        notes = st.text_area("Additional Notes (optional)", key="cg_notes")
+        
+        if st.button("✅ Complete Registration", use_container_width=True):
+            if name and username and password and relationship and experience:
+                if user_exists(username):
+                    st.error("Username already exists! Please choose another.")
+                else:
+                    st.session_state.user_profile = {
+                        'name': name,
+                        'username': username,
+                        'phone': phone,
+                        'password': password,
+                        'relationship': relationship,
+                        'experience': experience,
+                        'notes': notes,
+                        'userType': 'caregiver',
+                        'age': 30,
+                        'diseases': [],
+                    }
+                    save_user_data()
+                    st.success("Registration complete!")
+                    st.session_state.page = 'caregiver_dashboard'
+                    st.rerun()
+            else:
+                st.warning("Please fill all required fields")
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+
+# ============================================
+# PATIENT DASHBOARD
+# ============================================
+
 def patient_dashboard_page():
     """Main patient dashboard with tabs"""
     if not st.session_state.user_profile:
@@ -2030,26 +1367,19 @@ def patient_dashboard_page():
     age_category = get_age_category(age)
     greeting = get_time_of_day()
     
-    st.markdown(inject_wow_css(age_category), unsafe_allow_html=True)
-    
     col1, col2, col3 = st.columns([2, 4, 2])
     
     with col1:
-        st.markdown(f"<h2 style='color: white; font-weight: 800; text-shadow: 0 4px 20px rgba(0,0,0,0.3);'>{greeting}, {st.session_state.user_profile['name']}</h2>", unsafe_allow_html=True)
+        st.markdown(f"<h2>👋 {greeting}, {st.session_state.user_profile['name']}</h2>", unsafe_allow_html=True)
     
     with col2:
-        mascot_emoji = get_mascot_emoji(st.session_state.turtle_mood)
-        st.markdown(f"""
-        <div style="text-align:center;">
-            <div style="font-size: 60px; animation: mascot-bounce 2s ease-in-out infinite;">{mascot_emoji}</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f"<div class='turtle-container'><p style='text-align: center; font-size: 48px;'>{get_turtle_emoji(st.session_state.turtle_mood)}</p></div>", unsafe_allow_html=True)
     
     with col3:
         if st.button("🚪 Logout", use_container_width=True):
             save_user_data()
             clear_session_data()
-            st.session_state.page = 'patient_login'
+            st.session_state.page = 'account_type_selection'
             st.rerun()
     
     tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
@@ -2058,57 +1388,911 @@ def patient_dashboard_page():
     ])
     
     with tab1:
-        dashboard_overview_tab_wow(age_category)
+        dashboard_overview_tab(age_category)
     
-    # Keep other tabs as original (or you can upgrade them too!)
     with tab2:
-        st.markdown("<h3 style='color: #ffffff;'>💊 Your Medications</h3>", unsafe_allow_html=True)
-        st.info("Medications tab coming soon with WOW design!")
+        medications_tab()
     
     with tab3:
-        st.markdown("<h3 style='color: #ffffff;'>👨‍⚕️ Doctor Appointments</h3>", unsafe_allow_html=True)
-        st.info("Appointments tab coming soon with WOW design!")
+        appointments_tab()
     
     with tab4:
-        st.markdown("<h3 style='color: #ffffff;'>⚠️ Report & Track Side Effects</h3>", unsafe_allow_html=True)
-        st.info("Side Effects tab coming soon with WOW design!")
+        side_effects_tab()
     
     with tab5:
-        st.markdown("<h3 style='color: #ffffff;'>🏆 Your Achievements & Badges</h3>", unsafe_allow_html=True)
-        st.info("Achievements tab coming soon with WOW design!")
+        achievements_tab()
     
     with tab6:
-        st.markdown("<h3 style='color: #ffffff;'>📤 Generate & Download Health Reports</h3>", unsafe_allow_html=True)
-        st.info("Reports tab coming soon with WOW design!")
+        reports_tab()
     
     with tab7:
-        st.markdown("<h3 style='color: #ffffff;'>📊 Medication Analytics & Insights</h3>", unsafe_allow_html=True)
-        st.info("Analytics tab coming soon with WOW design!")
+        analytics_tab(age_category)
+
+def dashboard_overview_tab(age_category):
+    """Dashboard overview with stats and today's schedule"""
+    st.markdown("### 📊 Your Health Overview")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    total_meds = len(st.session_state.medications)
+    taken_today = sum(1 for med in st.session_state.medications if med.get('taken_today', False))
+    total_appointments = len(st.session_state.appointments)
+    adherence = calculate_adherence(st.session_state.medications)
+    
+    with col1:
+        st.markdown(f"""
+        <div class='stat-card'>
+            <div class='stat-number'>{total_meds}</div>
+            <div class='stat-label'>Medications</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown(f"""
+        <div class='stat-card'>
+            <div class='stat-number'>{taken_today}</div>
+            <div class='stat-label'>Taken Today</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown(f"""
+        <div class='stat-card'>
+            <div class='stat-number'>{total_appointments}</div>
+            <div class='stat-label'>Appointments</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        st.markdown(f"""
+        <div class='stat-card'>
+            <div class='stat-number'>{adherence:.0f}%</div>
+            <div class='stat-label'>Adherence</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.plotly_chart(create_medication_status_donut(st.session_state.medications), use_container_width=True)
+    
+    with col2:
+        st.plotly_chart(create_medication_pie_chart(st.session_state.medications, age_category), use_container_width=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("### 📅 Today's Medication Schedule")
+    
+    if st.session_state.medications:
+        sorted_meds = sorted(st.session_state.medications, key=lambda x: x.get('time', '00:00'))
+        
+        for med in sorted_meds:
+            col_a, col_b, col_c, col_d, col_e = st.columns([3, 2, 2, 2, 1])
+            
+            with col_a:
+                color_hex = get_medication_color_hex(med.get('color', 'blue'))
+                st.markdown(
+                    f"<div style='display: flex; align-items: center;'>"
+                    f"<div class='color-dot' style='background-color: {color_hex};'></div>"
+                    f"<strong>{med['name']}</strong> ({med['dosageAmount']})"
+                    f"</div>",
+                    unsafe_allow_html=True
+                )
+            
+            with col_b:
+                st.markdown(f"🕐 {format_time(med.get('time', 'N/A'))}")
+            
+            with col_c:
+                st.markdown(f"📦 {med.get('dosageType', 'pill').capitalize()}")
+            
+            with col_d:
+                if med.get('taken_today', False):
+                    st.markdown('<span class="status-taken">✅ Taken</span>', unsafe_allow_html=True)
+                else:
+                    st.markdown('<span class="status-pending">⏰ Pending</span>', unsafe_allow_html=True)
+            
+            with col_e:
+                if not med.get('taken_today', False):
+                    if st.button("✓", key=f"take_{med['id']}"):
+                        med['taken_today'] = True
+                        st.session_state.turtle_mood = 'excited'
+                        update_medication_history(med['id'], 'taken')
+                        update_adherence_history()
+                        save_user_data()
+                        st.rerun()
+            
+            st.markdown("<hr style='margin: 8px 0; opacity: 0.2;'>", unsafe_allow_html=True)
+    else:
+        st.info("No medications scheduled. Add medications in the Medications tab.")
+
+def analytics_tab(age_category):
+    """Analytics tab with comprehensive graphs"""
+    st.markdown("### 📈 Medication Analytics & Insights")
+    
+    st.markdown("#### Adherence Trend")
+    st.plotly_chart(
+        create_adherence_line_chart(st.session_state.get('adherence_history', []), age_category),
+        use_container_width=True
+    )
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.plotly_chart(create_daily_schedule_bar_chart(st.session_state.medications, age_category), use_container_width=True)
+    
+    with col2:
+        st.plotly_chart(create_side_effects_bar_chart(st.session_state.side_effects), use_container_width=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    st.markdown("#### Weekly Medication Pattern")
+    st.plotly_chart(create_weekly_heatmap(st.session_state.get('medication_history', [])), use_container_width=True)
+
+# ============================================
+# FEATURE TABS
+# ============================================
+
+def medications_tab():
+    """Medications tab content"""
+    st.markdown("### 💊 Your Medications")
+    
+    with st.expander("➕ Add New Medication", expanded=False):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            new_med_name = st.text_input("Medication Name", key="new_med_name")
+            new_dosage_type = st.selectbox("Type", ["pill", "liquid", "injection", "other"], key="new_dosage_type")
+            new_dosage_amount = st.text_input("Dosage Amount (e.g., 500mg)", key="new_dosage_amount")
+            new_instructions = st.text_area("Instructions (optional)", key="new_instructions")
+        
+        with col2:
+            new_frequency = st.selectbox("Frequency", [
+                "once-daily", "twice-daily", "three-times-daily",
+                "every-4-hours", "every-6-hours", "every-8-hours",
+                "every-12-hours", "as-needed", "weekly", "monthly"
+            ], key="new_frequency")
+            new_time = st.time_input("Time", key="new_time")
+            new_color = st.selectbox("Color Indicator", [
+                "Blue", "Green", "Purple", "Pink", "Orange", "Red", "Yellow", "Indigo"
+            ], key="new_color")
+        
+        if st.button("Add Medication", use_container_width=True, key="add_med_btn"):
+            if new_med_name and new_dosage_amount:
+                new_med = {
+                    'id': len(st.session_state.medications) + 1,
+                    'name': new_med_name,
+                    'dosageType': new_dosage_type,
+                    'dosageAmount': new_dosage_amount,
+                    'frequency': new_frequency,
+                    'time': new_time.strftime("%H:%M"),
+                    'color': new_color.lower(),
+                    'instructions': new_instructions,
+                    'taken_today': False,
+                    'created_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                }
+                
+                conflicts = check_medication_conflicts(st.session_state.medications, new_med)
+                if conflicts:
+                    st.warning(f"⚠️ Time conflict detected with: {', '.join(conflicts)}. Medications are scheduled close together.")
+                
+                st.session_state.medications.append(new_med)
+                save_user_data()
+                st.success(f"Added {new_med_name}!")
+                st.rerun()
+            else:
+                st.warning("Please fill in medication name and dosage")
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        sort_by = st.selectbox("Sort by", ["Time", "Name", "Type", "Status"], key="sort_meds")
+    with col2:
+        filter_by = st.selectbox("Filter by", ["All", "Taken", "Pending"], key="filter_meds")
+    
+    sorted_meds = st.session_state.medications.copy()
+    
+    if sort_by == "Time":
+        sorted_meds.sort(key=lambda x: x.get('time', '00:00'))
+    elif sort_by == "Name":
+        sorted_meds.sort(key=lambda x: x.get('name', ''))
+    elif sort_by == "Type":
+        sorted_meds.sort(key=lambda x: x.get('dosageType', ''))
+    elif sort_by == "Status":
+        sorted_meds.sort(key=lambda x: x.get('taken_today', False), reverse=True)
+    
+    if filter_by == "Taken":
+        sorted_meds = [m for m in sorted_meds if m.get('taken_today', False)]
+    elif filter_by == "Pending":
+        sorted_meds = [m for m in sorted_meds if not m.get('taken_today', False)]
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    if sorted_meds:
+        for med in sorted_meds:
+            color_hex = get_medication_color_hex(med.get('color', 'blue'))
+            
+            st.markdown(f"<div class='medication-card' style='border-left-color: {color_hex};'>", unsafe_allow_html=True)
+            
+            col1, col2, col3 = st.columns([4, 2, 1])
+            
+            with col1:
+                st.markdown(f"### {med['name']}")
+                st.markdown(f"**Dosage:** {med['dosageAmount']} | **Type:** {med['dosageType'].capitalize()}")
+                st.markdown(f"**Time:** {med['time']} | **Frequency:** {med['frequency'].replace('-', ' ').title()}")
+                if med.get('instructions'):
+                    st.markdown(f"**Instructions:** {med['instructions']}")
+            
+            with col2:
+                status = "Taken ✅" if med.get('taken_today', False) else "Pending ⏰"
+                st.markdown(f"**Status:** {status}")
+                st.markdown(
+                    f"<div style='width: 40px; height: 40px; background-color: {color_hex}; "
+                    f"border-radius: 50%; margin-top: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);'></div>",
+                    unsafe_allow_html=True
+                )
+            
+            with col3:
+                if st.button("🗑️", key=f"delete_{med['id']}", help="Delete"):
+                    st.session_state.medications = [m for m in st.session_state.medications if m['id'] != med['id']]
+                    save_user_data()
+                    st.rerun()
+                
+                if not med.get('taken_today', False):
+                    if st.button("✓ Take", key=f"take_med_{med['id']}", use_container_width=True):
+                        med['taken_today'] = True
+                        update_medication_history(med['id'], 'taken')
+                        update_adherence_history()
+                        save_user_data()
+                        st.rerun()
+            
+            st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
+    else:
+        st.info("No medications found. Add your first medication above!")
+
+def appointments_tab():
+    """Appointments tab content"""
+    st.markdown("### 👨‍⚕️ Doctor Appointments")
+    
+    with st.expander("➕ Schedule New Appointment", expanded=False):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            appt_doctor = st.text_input("Doctor Name", key="appt_doctor")
+            appt_specialty = st.text_input("Specialty", key="appt_specialty", placeholder="e.g., Cardiologist")
+            appt_date = st.date_input("Date", key="appt_date", min_value=date.today())
+        
+        with col2:
+            appt_time = st.time_input("Time", key="appt_time")
+            appt_location = st.text_input("Location", key="appt_location", placeholder="Hospital/Clinic name")
+            appt_phone = st.text_input("Contact Phone (optional)", key="appt_phone")
+        
+        appt_notes = st.text_area("Notes (optional)", key="appt_notes", placeholder="Reason for visit, things to discuss, etc.")
+        
+        if st.button("Schedule Appointment", use_container_width=True, key="add_appt_btn"):
+            if appt_doctor and appt_date:
+                new_appt = {
+                    'id': len(st.session_state.appointments) + 1,
+                    'doctor': appt_doctor,
+                    'specialty': appt_specialty,
+                    'date': appt_date.strftime("%Y-%m-%d"),
+                    'time': appt_time.strftime("%H:%M"),
+                    'location': appt_location,
+                    'phone': appt_phone,
+                    'notes': appt_notes,
+                    'created_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                }
+                
+                st.session_state.appointments.append(new_appt)
+                save_user_data()
+                st.success(f"Appointment with Dr. {appt_doctor} scheduled!")
+                st.rerun()
+            else:
+                st.warning("Please fill in doctor name and date")
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    filter_option = st.selectbox("Filter", ["All Appointments", "Upcoming", "Past"], key="filter_appointments")
+    
+    today = date.today().strftime("%Y-%m-%d")
+    filtered_appts = st.session_state.appointments.copy()
+    
+    if filter_option == "Upcoming":
+        filtered_appts = [a for a in filtered_appts if a['date'] >= today]
+    elif filter_option == "Past":
+        filtered_appts = [a for a in filtered_appts if a['date'] < today]
+    
+    filtered_appts.sort(key=lambda x: x['date'])
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    if filtered_appts:
+        for appt in filtered_appts:
+            days = days_until(appt['date'])
+            
+            if days < 0:
+                card_style = "border-left: 4px solid #6b7280;"
+                status_badge = '<span class="status-missed">Past</span>'
+            elif days == 0:
+                card_style = "border-left: 4px solid #ef4444;"
+                status_badge = '<span class="status-missed">Today!</span>'
+            elif days <= 7:
+                card_style = "border-left: 4px solid #f59e0b;"
+                status_badge = '<span class="status-upcoming">Soon</span>'
+            else:
+                card_style = "border-left: 4px solid #10b981;"
+                status_badge = '<span class="status-taken">Scheduled</span>'
+            
+            st.markdown(f"<div class='medication-card' style='{card_style}'>", unsafe_allow_html=True)
+            
+            col1, col2, col3 = st.columns([4, 2, 1])
+            
+            with col1:
+                st.markdown(f"### 👨‍⚕️ Dr. {appt['doctor']}")
+                if appt.get('specialty'):
+                    st.markdown(f"**Specialty:** {appt['specialty']}")
+                st.markdown(f"**Date:** {format_date(appt['date'])} ({days} days)" if days >= 0 else f"**Date:** {format_date(appt['date'])} (past)")
+                st.markdown(f"**Time:** {appt['time']}")
+                if appt.get('location'):
+                    st.markdown(f"**Location:** {appt['location']}")
+                if appt.get('phone'):
+                    st.markdown(f"**Contact:** {appt['phone']}")
+                if appt.get('notes'):
+                    st.markdown(f"**Notes:** {appt['notes']}")
+            
+            with col2:
+                st.markdown(f"**Status:** {status_badge}", unsafe_allow_html=True)
+                if days >= 0:
+                    if days == 0:
+                        st.markdown("### 🔔")
+                        st.markdown("**Appointment Today!**")
+                    elif days == 1:
+                        st.markdown("### ⏰")
+                        st.markdown("**Tomorrow**")
+                    else:
+                        st.markdown(f"### 📅")
+                        st.markdown(f"**In {days} days**")
+            
+            with col3:
+                if st.button("🗑️", key=f"delete_appt_{appt['id']}", help="Cancel"):
+                    st.session_state.appointments = [a for a in st.session_state.appointments if a['id'] != appt['id']]
+                    save_user_data()
+                    st.rerun()
+            
+            st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
+    else:
+        st.info("No appointments found.")
+
+def side_effects_tab():
+    """Side effects tab content"""
+    st.markdown("### ⚠️ Report & Track Side Effects")
+    
+    with st.expander("➕ Report New Side Effect", expanded=False):
+        if not st.session_state.medications:
+            st.warning("Please add medications first before reporting side effects.")
+        else:
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                effect_med = st.selectbox("Medication", [m['name'] for m in st.session_state.medications], key="effect_med")
+                effect_severity = st.select_slider("Severity Level", options=["Mild", "Moderate", "Severe"], key="effect_severity")
+            
+            with col2:
+                effect_type = st.selectbox("Type of Side Effect",
+                    ["Nausea", "Dizziness", "Headache", "Fatigue", "Rash", "Pain", "Other"],
+                    key="effect_type")
+                effect_date = st.date_input("Date Occurred", key="effect_date")
+            
+            effect_description = st.text_area("Description", key="effect_description",
+                placeholder="Describe the side effect in detail...")
+            
+            if effect_severity == "Severe":
+                st.error("⚠️ Severe side effects should be reported to your doctor immediately!")
+            elif effect_severity == "Moderate":
+                st.warning("⚠️ Consider consulting your doctor about this side effect.")
+            
+            if st.button("Report Side Effect", use_container_width=True, key="report_effect_btn"):
+                if effect_description:
+                    new_effect = {
+                        'id': len(st.session_state.side_effects) + 1,
+                        'medication': effect_med,
+                        'severity': effect_severity,
+                        'type': effect_type,
+                        'description': effect_description,
+                        'date': effect_date.strftime("%Y-%m-%d"),
+                        'reported_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    }
+                    
+                    st.session_state.side_effects.append(new_effect)
+                    save_user_data()
+                    st.success("Side effect reported successfully!")
+                    
+                    if effect_severity == "Severe":
+                        st.error("🚨 Please contact your doctor as soon as possible!")
+                    
+                    st.rerun()
+                else:
+                    st.warning("Please provide a description of the side effect")
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        severity_filter = st.selectbox("Filter by Severity", ["All", "Mild", "Moderate", "Severe"], key="severity_filter")
+    with col2:
+        sort_option = st.selectbox("Sort by", ["Most Recent", "Oldest First", "Severity"], key="sort_effects")
+    
+    filtered_effects = st.session_state.side_effects.copy()
+    
+    if severity_filter != "All":
+        filtered_effects = [e for e in filtered_effects if e.get('severity') == severity_filter]
+    
+    if sort_option == "Most Recent":
+        filtered_effects.sort(key=lambda x: x.get('date', ''), reverse=True)
+    elif sort_option == "Oldest First":
+        filtered_effects.sort(key=lambda x: x.get('date', ''))
+    elif sort_option == "Severity":
+        severity_order = {'Severe': 3, 'Moderate': 2, 'Mild': 1}
+        filtered_effects.sort(key=lambda x: severity_order.get(x.get('severity', 'Mild'), 0), reverse=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    if st.session_state.side_effects:
+        col1, col2, col3, col4 = st.columns(4)
+        total = len(st.session_state.side_effects)
+        mild = sum(1 for e in st.session_state.side_effects if e.get('severity') == 'Mild')
+        moderate = sum(1 for e in st.session_state.side_effects if e.get('severity') == 'Moderate')
+        severe = sum(1 for e in st.session_state.side_effects if e.get('severity') == 'Severe')
+        
+        with col1:
+            st.metric("Total Reports", total)
+        with col2:
+            st.metric("Mild", mild)
+        with col3:
+            st.metric("Moderate", moderate)
+        with col4:
+            st.metric("Severe", severe)
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+    
+    if filtered_effects:
+        for effect in filtered_effects:
+            severity = effect.get('severity', 'Mild')
+            severity_color = get_severity_color(severity)
+            severity_emoji = get_severity_emoji(severity)
+            
+            st.markdown(f"<div class='medication-card' style='border-left: 4px solid {severity_color};'>", unsafe_allow_html=True)
+            
+            col1, col2, col3 = st.columns([4, 2, 1])
+            
+            with col1:
+                st.markdown(f"### {severity_emoji} {effect['medication']}")
+                st.markdown(f"**Type:** {effect.get('type', 'Not specified')}")
+                st.markdown(f"**Severity:** {severity}")
+                st.markdown(f"**Date:** {effect['date']}")
+                st.markdown(f"**Description:** {effect['description']}")
+            
+            with col2:
+                st.markdown(f"""
+                <div style='text-align: center; padding: 16px; background-color: {severity_color}20; 
+                            border-radius: 12px; margin-top: 10px;'>
+                    <div style='font-size: 48px;'>{severity_emoji}</div>
+                    <div style='font-weight: 700; color: {severity_color};'>{severity}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col3:
+                if st.button("🗑️", key=f"delete_effect_{effect['id']}", help="Remove"):
+                    st.session_state.side_effects = [e for e in st.session_state.side_effects if e['id'] != effect['id']]
+                    save_user_data()
+                    st.rerun()
+            
+            st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
+    else:
+        if severity_filter != "All":
+            st.info(f"No {severity_filter.lower()} side effects reported. That's good!")
+        else:
+            st.success("No side effects reported. Great job! 🎉")
+
+def achievements_tab():
+    """Achievements tab content"""
+    st.markdown("### 🏆 Your Achievements & Badges")
+    
+    achievements_list = [
+        {'id': 'first_step', 'name': 'First Step', 'description': 'Created your MedTimer account',
+         'icon': '🎯', 'earned': True, 'category': 'Getting Started'},
+        {'id': 'first_medication', 'name': 'Medicine Cabinet', 'description': 'Added your first medication',
+         'icon': '💊', 'earned': len(st.session_state.medications) >= 1, 'category': 'Medications'},
+        {'id': 'med_master', 'name': 'Med Master', 'description': 'Added 5 or more medications',
+         'icon': '🎓', 'earned': len(st.session_state.medications) >= 5, 'category': 'Medications'},
+        {'id': 'perfect_day', 'name': 'Perfect Day', 'description': 'Took all medications on time today',
+         'icon': '⭐', 'earned': all(m.get('taken_today', False) for m in st.session_state.medications) if st.session_state.medications else False,
+         'category': 'Adherence'},
+        {'id': 'health_tracker', 'name': 'Health Tracker', 'description': 'Scheduled 3 doctor appointments',
+         'icon': '📅', 'earned': len(st.session_state.appointments) >= 3, 'category': 'Appointments'},
+        {'id': 'appointment_keeper', 'name': 'Appointment Keeper', 'description': 'Scheduled your first appointment',
+         'icon': '👨‍⚕️', 'earned': len(st.session_state.appointments) >= 1, 'category': 'Appointments'},
+        {'id': 'week_warrior', 'name': 'Week Warrior', 'description': 'Maintained 7 day adherence streak',
+         'icon': '🔥', 'earned': False, 'category': 'Streaks'},
+        {'id': 'side_effect_reporter', 'name': 'Health Advocate', 'description': 'Reported a side effect',
+         'icon': '⚠️', 'earned': len(st.session_state.side_effects) >= 1, 'category': 'Health Monitoring'},
+        {'id': 'turtle_friend', 'name': 'Turtle\'s Best Friend', 'description': 'Made your turtle companion happy',
+         'icon': '🐢', 'earned': st.session_state.turtle_mood in ['happy', 'excited', 'celebrating'], 'category': 'Fun'},
+        {'id': 'consistency_king', 'name': 'Consistency King/Queen', 'description': 'Achieve 100% adherence rate',
+         'icon': '👑', 'earned': all(m.get('taken_today', False) for m in st.session_state.medications) and len(st.session_state.medications) > 0,
+         'category': 'Adherence'}
+    ]
+    
+    earned_count = sum(1 for a in achievements_list if a['earned'])
+    total_count = len(achievements_list)
+    progress_pct = (earned_count / total_count * 100) if total_count > 0 else 0
+    
+    st.markdown(f"""
+    <div style='text-align: center; padding: 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                border-radius: 16px; color: white; margin-bottom: 24px;'>
+        <h2 style='color: white; margin: 0;'>🎯 {earned_count} / {total_count} Achievements Unlocked</h2>
+        <p style='font-size: 18px; margin-top: 8px;'>{progress_pct:.0f}% Complete</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.progress(progress_pct / 100)
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    cols = st.columns(3)
+    
+    for i, achievement in enumerate(achievements_list):
+        col = cols[i % 3]
+        
+        with col:
+            if achievement['earned']:
+                opacity = "1.0"
+                border_color = "#10b981"
+                bg_gradient = "linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)"
+                status = '<span style="color: #10b981; font-weight: 700;">✅ Earned</span>'
+            else:
+                opacity = "0.6"
+                border_color = "#e5e7eb"
+                bg_gradient = "linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)"
+                status = '<span style="color: #6b7280; font-weight: 600;">🔒 Locked</span>'
+            
+            st.markdown(f"""
+            <div style='text-align: center; padding: 20px; background: {bg_gradient}; 
+                        border-radius: 16px; margin: 10px 0; opacity: {opacity}; 
+                        border: 3px solid {border_color}; transition: all 0.3s ease;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.1);'>
+                <div style='font-size: 56px; margin-bottom: 12px;'>{achievement['icon']}</div>
+                <h3 style='margin: 8px 0; color: #1f2937;'>{achievement['name']}</h3>
+                <p style='font-size: 14px; color: #6b7280; margin: 8px 0;'>{achievement['description']}</p>
+                <div style='margin-top: 12px;'>{status}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+def reports_tab():
+    """Reports tab content"""
+    st.markdown("### 📥 Generate & Download Health Reports")
+    
+    report_type = st.selectbox("Report Type", [
+        "Complete Health Report",
+        "Medication History",
+        "Adherence Report",
+        "Appointment Summary",
+        "Side Effects Log",
+        "Monthly Summary"
+    ])
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        start_date = st.date_input("Start Date", value=date.today() - timedelta(days=30))
+    with col2:
+        end_date = st.date_input("End Date", value=date.today())
+    
+    report_format = st.radio("Format", ["Text", "CSV", "Detailed"], horizontal=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    if st.button("📄 Generate Report", use_container_width=True):
+        profile = st.session_state.user_profile
+        
+        report = f"""
+{'=' * 70}
+MEDTIMER HEALTH REPORT
+{'=' * 70}
+
+Patient: {profile['name']}
+Username: {profile['username']}
+Age: {profile['age']}
+Report Type: {report_type}
+Date Range: {start_date} to {end_date}
+Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+{'=' * 70}
+
+MEDICATIONS ({len(st.session_state.medications)})
+{'-' * 70}
+
+"""
+        
+        if report_format == "CSV":
+            report += "Name,Dosage,Type,Frequency,Time,Status\n"
+            for med in st.session_state.medications:
+                status = "Taken" if med.get('taken_today', False) else "Pending"
+                report += f"{med['name']},{med['dosageAmount']},{med['dosageType']},{med['frequency']},{med['time']},{status}\n"
+        else:
+            for i, med in enumerate(st.session_state.medications, 1):
+                status = "✅ Taken" if med.get('taken_today', False) else "⏰ Pending"
+                report += f"""
+{i}. {med['name']}
+   - Dosage: {med['dosageAmount']}
+   - Type: {med['dosageType'].capitalize()}
+   - Frequency: {med['frequency'].replace('-', ' ').title()}
+   - Time: {med['time']}
+   - Status: {status}
+
+"""
+        
+        report += f"""
+APPOINTMENTS ({len(st.session_state.appointments)})
+{'-' * 70}
+
+"""
+        
+        for i, appt in enumerate(st.session_state.appointments, 1):
+            report += f"""
+{i}. Dr. {appt['doctor']}
+   - Specialty: {appt.get('specialty', 'N/A')}
+   - Date: {appt['date']}
+   - Time: {appt['time']}
+   - Location: {appt.get('location', 'N/A')}
+
+"""
+        
+        report += f"""
+SIDE EFFECTS LOG ({len(st.session_state.side_effects)})
+{'-' * 70}
+
+"""
+        
+        for i, effect in enumerate(st.session_state.side_effects, 1):
+            report += f"""
+{i}. {effect['medication']} - {effect['severity']}
+   - Type: {effect.get('type', 'N/A')}
+   - Date: {effect['date']}
+   - Description: {effect['description']}
+
+"""
+        
+        report += f"""
+{'=' * 70}
+End of Report
+Generated by MedTimer - Your Medication Management Companion
+{'=' * 70}
+"""
+        
+        st.markdown("### 📄 Report Preview")
+        st.text_area("Preview", report, height=300, key="report_preview")
+        
+        file_extension = "txt" if report_format != "CSV" else "csv"
+        filename = f"medtimer_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{file_extension}"
+        
+        st.download_button(
+            label="⬇️ Download Report",
+            data=report,
+            file_name=filename,
+            mime="text/plain" if report_format != "CSV" else "text/csv",
+            use_container_width=True
+        )
+        
+        st.success("Report generated successfully!")
+
+# ============================================
+# CAREGIVER DASHBOARD
+# ============================================
+
+def caregiver_dashboard_page():
+    """Main caregiver dashboard"""
+    if not st.session_state.user_profile:
+        st.session_state.page = 'caregiver_login'
+        st.rerun()
+        return
+    
+    col1, col2 = st.columns([4, 1])
+    
+    with col1:
+        st.markdown(f"<h1>🤝 Caregiver Dashboard - {st.session_state.user_profile['name']}</h1>", unsafe_allow_html=True)
+    
+    with col2:
+        if st.button("🚪 Logout", use_container_width=True):
+            save_user_data()
+            clear_session_data()
+            st.session_state.page = 'account_type_selection'
+            st.rerun()
+    
+    tab1, tab2, tab3, tab4 = st.tabs(["👥 My Patients", "📊 Overview", "🔗 Connect", "⚙️ Settings"])
+    
+    with tab1:
+        st.markdown("### 👥 Connected Patients")
+        
+        if 'connected_patients' not in st.session_state:
+            st.session_state.connected_patients = []
+        
+        if st.session_state.connected_patients:
+            for patient in st.session_state.connected_patients:
+                st.markdown("<div class='medication-card' style='border-left: 4px solid #10b981;'>", unsafe_allow_html=True)
+                
+                col1, col2, col3 = st.columns([3, 2, 1])
+                
+                with col1:
+                    st.markdown(f"### 👤 {patient['name']}")
+                    st.markdown(f"**Age:** {patient['age']}")
+                    st.markdown(f"**Access Code:** {patient['access_code']}")
+                    st.markdown(f"**Last Contact:** {patient.get('last_contact', 'N/A')}")
+                
+                with col2:
+                    st.metric("Medications", patient.get('medications', 0))
+                    st.metric("Adherence", f"{patient.get('adherence', 0)}%")
+                
+                with col3:
+                    if st.button("🗑️ Disconnect", key=f"disconnect_patient_{patient['id']}", use_container_width=True):
+                        st.session_state.connected_patients = [p for p in st.session_state.connected_patients if p['id'] != patient['id']]
+                        save_user_data()
+                        st.rerun()
+                
+                st.markdown("</div>", unsafe_allow_html=True)
+                st.markdown("<br>", unsafe_allow_html=True)
+        else:
+            st.info("You haven't connected to any patients yet. Use the Connect tab to link with a patient using their access code.")
+            
+            if st.button("➕ Add Demo Patient", use_container_width=True):
+                demo_patient = {
+                    'id': 1,
+                    'name': 'Demo Patient',
+                    'age': 65,
+                    'access_code': '123456',
+                    'medications': 5,
+                    'adherence': 85,
+                    'last_contact': 'Today'
+                }
+                st.session_state.connected_patients.append(demo_patient)
+                save_user_data()
+                st.rerun()
+    
+    with tab2:
+        st.markdown("### 📊 Overall Statistics")
+        
+        total_patients = len(st.session_state.connected_patients)
+        total_medications = sum(p.get('medications', 0) for p in st.session_state.connected_patients)
+        avg_adherence = sum(p.get('adherence', 0) for p in st.session_state.connected_patients) / total_patients if total_patients > 0 else 0
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.markdown(f"""
+            <div class='stat-card'>
+                <div class='stat-number'>{total_patients}</div>
+                <div class='stat-label'>Patients</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown(f"""
+            <div class='stat-card'>
+                <div class='stat-number'>{total_medications}</div>
+                <div class='stat-label'>Total Medications</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col3:
+            st.markdown(f"""
+            <div class='stat-card'>
+                <div class='stat-number'>{avg_adherence:.0f}%</div>
+                <div class='stat-label'>Avg Adherence</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col4:
+            st.markdown("""
+            <div class='stat-card'>
+                <div class='stat-number'>0</div>
+                <div class='stat-label'>Alerts</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        if total_patients > 0:
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.info("Connect to patients to see detailed overview statistics.")
+        else:
+            st.info("Connect to patients to see overview statistics.")
+    
+    with tab3:
+        st.markdown("### 🔗 Connect to Patient")
+        
+        st.info("Ask your patient for their 6-digit access code to connect and monitor their medication adherence.")
+        
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            patient_code = st.text_input("Patient Access Code", max_chars=6, key="patient_connect_code")
+        
+        with col2:
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("🔗 Connect", use_container_width=True):
+                if patient_code and len(patient_code) == 6:
+                    st.success(f"Successfully connected to patient with code: {patient_code}")
+                    st.info("In a full implementation, this would fetch and link patient data.")
+                else:
+                    st.warning("Please enter a valid 6-digit code")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        st.markdown("### 🔑 Your Caregiver Access Code")
+        
+        if 'caregiver_code' not in st.session_state:
+            st.session_state.caregiver_code = generate_patient_code()
+        
+        st.code(st.session_state.caregiver_code, language=None)
+        st.caption("Share this code with patients who want to connect with you.")
+    
+    with tab4:
+        st.markdown("### ⚙️ Profile Settings")
+        
+        profile = st.session_state.user_profile
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown(f"**Name:** {profile['name']}")
+            st.markdown(f"**Username:** {profile['username']}")
+            st.markdown(f"**Role:** {profile.get('relationship', 'N/A')}")
+        
+        with col2:
+            st.markdown(f"**Experience:** {profile.get('experience', 'N/A')}")
+            st.markdown(f"**Phone:** {profile.get('phone', 'Not provided')}")
+        
+        if profile.get('notes'):
+            st.markdown(f"**Notes:** {profile['notes']}")
+
+# ============================================
+# MAIN APPLICATION
+# ============================================
 
 def main():
     """Main application router"""
+    
+    # Initialize database
     init_database()
+    
+    # Initialize session state
     initialize_session_state()
     
-    age_category = 'adult'
-    if st.session_state.user_profile:
-        age = st.session_state.user_profile.get('age', 25)
-        age_category = get_age_category(age)
+    # Inject CSS
+    st.markdown(inject_custom_css(), unsafe_allow_html=True)
     
-    st.markdown(inject_wow_css(age_category), unsafe_allow_html=True)
-    
+    # Route to appropriate page
     page = st.session_state.page
     
-    if page == 'patient_login':
-        st.error("Please log in first!")
-        # Add login pages here if needed
+    if page == 'account_type_selection':
+        account_type_selection_page()
+    elif page == 'patient_login':
+        patient_login_page()
     elif page == 'patient_signup':
-        st.error("Please sign up first!")
-        # Add signup pages here if needed
+        patient_signup_page()
     elif page == 'patient_dashboard':
         patient_dashboard_page()
+    elif page == 'caregiver_login':
+        caregiver_login_page()
+    elif page == 'caregiver_signup':
+        caregiver_signup_page()
+    elif page == 'caregiver_dashboard':
+        caregiver_dashboard_page()
     else:
-        st.error("Please log in first!")
+        account_type_selection_page()
 
 if __name__ == "__main__":
     main()
+
