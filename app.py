@@ -8,9 +8,7 @@ from datetime import datetime, timedelta, date
 import pandas as pd
 import random
 
-# ============================================
-# PAGE CONFIGURATION
-# ============================================
+
 
 st.set_page_config(
     page_title="MedTimer - Medication Management",
@@ -19,9 +17,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ============================================
-# DATABASE SETUP
-# ============================================
 
 def init_database():
     """Initialize SQLite database with all tables"""
@@ -127,31 +122,28 @@ def get_db_connection():
     """Get database connection"""
     return sqlite3.connect('medtimer.db', check_same_thread=False)
 
-# ============================================
-# UTILITY FUNCTIONS
-# ============================================
 
 def get_age_category(age):
     """Determine age category based on age"""
-    if age < 13:
-        return 'kid'
-    elif age <= 45:
+    if age < 18:
+        return 'youth'
+    elif age <= 40:
         return 'adult'
     else:
         return 'senior'
 
 def get_gradient_style(age_category):
     """Get gradient background style based on age category"""
-    if age_category == 'kid':
-        return "background: linear-gradient(135deg, #9333ea 0%, #ec4899 100%);"
+    if age_category == 'youth':
+        return "background: linear-gradient(135deg, #9333ea 0%, #a855f7 50%, #c084fc 100%);"
     elif age_category == 'adult':
-        return "background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);"
+        return "background: linear-gradient(135deg, #22c55e 0%, #16a34a 50%, #15803d 100%);"
     else:
-        return "background: linear-gradient(135deg, #10b981 0%, #14b8a6 100%);"
+        return "background: linear-gradient(135deg, #eab308 0%, #ca8a04 50%, #a16207 100%);"
 
 def get_font_size(age_category):
     """Get font size based on age category"""
-    if age_category == 'kid':
+    if age_category == 'youth':
         return "16px"
     elif age_category == 'adult':
         return "18px"
@@ -160,24 +152,225 @@ def get_font_size(age_category):
 
 def get_primary_color(age_category):
     """Get primary color based on age category"""
-    if age_category == 'kid':
+    if age_category == 'youth':
         return "#9333ea"
     elif age_category == 'adult':
-        return "#ef4444"
+        return "#22c55e"
     else:
-        return "#10b981"
+        return "#eab308"
 
 def get_secondary_color(age_category):
     """Get secondary color based on age category"""
-    if age_category == 'kid':
-        return "#ec4899"
+    if age_category == 'youth':
+        return "#a855f7"
     elif age_category == 'adult':
-        return "#f97316"
+        return "#16a34a"
     else:
-        return "#14b8a6"
+        return "#ca8a04"
 
 def format_time(time_str):
     """Format time string"""
+
+def get_custom_medication_times(frequency):
+    """Get default custom medication times based on frequency"""
+    frequency_map = {
+        'once-daily': ['09:00'],
+        'twice-daily': ['08:00', '20:00'],
+        'three-times-daily': ['08:00', '13:00', '20:00'],
+        'every-4-hours': ['08:00', '12:00', '16:00', '20:00'],
+        'every-6-hours': ['06:00', '12:00', '18:00', '00:00'],
+        'every-8-hours': ['08:00', '16:00', '00:00'],
+        'every-12-hours': ['08:00', '20:00'],
+        'as-needed': ['09:00'],
+        'weekly': ['09:00'],
+        'monthly': ['09:00']
+    }
+    return frequency_map.get(frequency, ['09:00'])
+
+def play_reminder_sound():
+    """Play reminder sound using HTML audio"""
+    audio_html = """
+    <audio id="reminderSound" autoplay>
+        <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg">
+        Your browser does not support the audio element.
+    </audio>
+    <script>
+        var audio = document.getElementById('reminderSound');
+        audio.volume = 0.5;
+        audio.play().catch(function(error) {
+            console.log('Audio play failed:', error);
+        });
+    </script>
+    """
+    st.markdown(audio_html, unsafe_allow_html=True)
+
+def categorize_medications_by_status():
+    """Categorize medications into missed, upcoming, and taken"""
+    now = datetime.now()
+    current_time = now.strftime("%H:%M")
+    
+    missed = []
+    upcoming = []
+    taken = []
+    
+    for med in st.session_state.medications:
+        med_time = med.get('time', '00:00')
+        
+        # Check if medication has multiple reminder times
+        if med.get('reminder_times'):
+            for time_slot in med['reminder_times']:
+                if time_slot < current_time and not med.get('taken_today', False):
+                    if not any(m['id'] == med['id'] and m['time'] == time_slot for m in missed):
+                        missed.append({
+                            'id': med['id'],
+                            'name': med['name'],
+                            'time': time_slot,
+                            'dosageAmount': med['dosageAmount'],
+                            'color': med.get('color', 'blue')
+                        })
+                elif time_slot > current_time and not med.get('taken_today', False):
+                    if not any(m['id'] == med['id'] and m['time'] == time_slot for m in upcoming):
+                        upcoming.append({
+                            'id': med['id'],
+                            'name': med['name'],
+                            'time': time_slot,
+                            'dosageAmount': med['dosageAmount'],
+                            'color': med.get('color', 'blue')
+                        })
+        
+        # Check main time
+        if med.get('taken_today', False):
+            taken.append(med)
+        elif med_time < current_time:
+            if not any(m['id'] == med['id'] and m['time'] == med_time for m in missed):
+                missed.append({
+                    'id': med['id'],
+                    'name': med['name'],
+                    'time': med_time,
+                    'dosageAmount': med['dosageAmount'],
+                    'color': med.get('color', 'blue')
+                })
+        else:
+            if not any(m['id'] == med['id'] and m['time'] == med_time for m in upcoming):
+                upcoming.append({
+                    'id': med['id'],
+                    'name': med['name'],
+                    'time': med_time,
+                    'dosageAmount': med['dosageAmount'],
+                    'color': med.get('color', 'blue')
+                })
+    
+    # Sort by time
+    missed.sort(key=lambda x: x['time'])
+    upcoming.sort(key=lambda x: x['time'])
+    
+    return missed, upcoming, taken
+
+def get_mascot_message(adherence, time_of_day):
+    """Get mascot message based on adherence and time of day"""
+    
+    
+    if adherence >= 90:
+        messages = {
+            'morning': [
+                "🌟 You're a medication superstar! Keep shining!",
+                "☀️ Amazing start to the day! 90%+ adherence!",
+                "🎯 Perfect score so far! You're crushing it!"
+            ],
+            'afternoon': [
+                "🌟 Still going strong! You're unstoppable!",
+                "💪 Your dedication is inspiring!",
+                "🏆 Champion status maintained all day!"
+            ],
+            'evening': [
+                "🌟 What a perfect day! You're amazing!",
+                "🎉 Congratulations on near-perfect adherence!",
+                "⭐ You've mastered your medication routine!"
+            ]
+        }
+    elif adherence >= 70:
+        messages = {
+            'morning': [
+                "👍 Good start today! Let's keep it up!",
+                "💪 You're doing great! Keep going!",
+                "🌅 Nice start! Stay on track!"
+            ],
+            'afternoon': [
+                "👍 Still doing well! Almost there!",
+                "💪 Good progress! You can do it!",
+                "🌤 Staying strong! Keep focused!"
+            ],
+            'evening': [
+                "👍 Good effort today! Tomorrow will be even better!",
+                "💪 Solid work! Rest well!",
+                "🌙 Nice job! You're improving!"
+            ]
+        }
+    elif adherence >= 50:
+        messages = {
+            'morning': [
+                "🤔 Let's focus on today's medications!",
+                "💭 Every pill counts! Let's try to take all!",
+                "📋 Review your schedule and stay mindful!"
+            ],
+            'afternoon': [
+                "🤔 Keep trying! You've got this!",
+                "💭 Stay focused on your health goals!",
+                "📋 Don't forget your afternoon doses!"
+            ],
+            'evening': [
+                "🤔 Tomorrow is a new day! Let's plan better!",
+                "💭 Reflect and prepare for a better day!",
+                "📋 Let's organize your schedule for tomorrow!"
+            ]
+        }
+    else:
+        messages = {
+            'morning': [
+                "⚠️ Let's make today better than yesterday!",
+                "💪 Start fresh! You can improve!",
+                "🎯 Focus on one medication at a time!"
+            ],
+            'afternoon': [
+                "⚠️ Don't give up! Every dose matters!",
+                "💪 Small steps lead to big changes!",
+                "🎯 Stay committed to your health!"
+            ],
+            'evening': [
+                "⚠️ Tomorrow is a fresh start! Let's plan!",
+                "💪 I believe in you! Try again tomorrow!",
+                "🎯 Let's set a goal for tomorrow!"
+            ]
+        }
+    
+    import random
+    return random.choice(messages.get(time_of_day, messages['morning']))
+
+def update_mascot_mood(adherence):
+    """Update mascot mood based on adherence"""
+    if adherence >= 90:
+        st.session_state.turtle_mood = 'excited'
+    elif adherence >= 70:
+        st.session_state.turtle_mood = 'happy'
+    elif adherence >= 50:
+        st.session_state.turtle_mood = 'neutral'
+    else:
+        st.session_state.turtle_mood = 'worried'
+
+def check_upcoming_reminders(upcoming_meds):
+    """Check for upcoming medications and show reminders"""
+    now = datetime.now()
+    current_time = now.strftime("%H:%M")
+    
+    for med in upcoming_meds[:3]:  # Check next 3 upcoming meds
+        med_time = datetime.strptime(med['time'], "%H:%M")
+        time_diff = (med_time - now).total_seconds() / 60  # Difference in minutes
+        
+        # Show reminder if medication is within 15 minutes
+        if 0 < time_diff <= 15:
+            st.warning(f"⏰ **Upcoming:** {med['name']} ({med['dosageAmount']}) at {med['time']} - Take in {int(time_diff)} minutes!")
+            return True
+    return False
     try:
         time_obj = datetime.strptime(time_str, "%H:%M")
         return time_obj.strftime("%I:%M %p")
@@ -192,17 +385,16 @@ def calculate_adherence(medications):
     total = len(medications)
     return (taken / total * 100) if total > 0 else 0
 
-def get_turtle_emoji(mood):
-    """Get turtle emoji based on mood"""
-    turtle_emojis = {
-        'happy': '🐢😊',
-        'sad': '🐢😢',
-        'excited': '🐢🎉',
-        'sleeping': '🐢😴',
-        'thinking': '🐢🤔',
-        'celebrating': '🐢🎊'
-    }
-    return turtle_emojis.get(mood, '🐢')
+def get_mascot_image(mood):
+    
+
+    return {
+        'happy': r"C:\Users\tnvxx\OneDrive\Desktop\medtimer_dog\assets\mascot\happy.png",
+        'excited': r"C:\Users\tnvxx\OneDrive\Desktop\medtimer_dog\assets\mascot\happy.png",
+        'neutral': r"C:\Users\tnvxx\OneDrive\Desktop\medtimer_dog\assets\mascot\happy.png",
+        'worried': r"C:\Users\tnvxx\OneDrive\Desktop\medtimer_dog\assets\mascot\happy.png"
+    }.get(mood, r"C:\Users\tnvxx\OneDrive\Desktop\medtimer_dog\assets\mascot\happy.png")
+
 
 def get_severity_color(severity):
     """Get color for severity level"""
@@ -298,9 +490,7 @@ def initialize_session_state():
     if 'connected_patients' not in st.session_state:
         st.session_state.connected_patients = []
 
-# ============================================
-# DATABASE FUNCTIONS
-# ============================================
+
 
 def save_user_data():
     """Save user data to SQLite database"""
@@ -564,176 +754,185 @@ def clear_session_data():
     st.session_state.signup_step = 1
     st.session_state.signup_data = {}
 
-# ============================================
-# CSS STYLES
-# ============================================
 
-def inject_custom_css():
-    """Inject custom CSS into Streamlit app"""
-    css = """
+
+def inject_custom_css(age_category='adult'):
+    """Inject custom CSS into Streamlit app with age-based styling"""
+    primary_color = get_primary_color(age_category)
+    secondary_color = get_secondary_color(age_category)
+    font_size = get_font_size(age_category)
+    background_style = get_gradient_style(age_category)
+    
+    css = f"""
     <style>
-    .stApp {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    }
+    .stApp {{
+        {background_style}
+    }}
     
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
+    #MainMenu {{visibility: hidden;}}
+    footer {{visibility: hidden;}}
+    header {{visibility: hidden;}}
     
-    h1 {
+    h1 {{
         font-weight: 800 !important;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, {primary_color} 0%, {secondary_color} 100%);
         -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        -webkit-text-fill-color: black;
         background-clip: text;
-    }
+    }}
     
-    .medication-card {
+    p, div, span, label {{
+        font-size: {font_size} !important;
+    }}
+    
+    h1 {{ font-size: calc({font_size} * 2.5) !important; }}
+    h2 {{ font-size: calc({font_size} * 2) !important; }}
+    h3 {{ font-size: calc({font_size} * 1.5) !important; }}
+    
+    .medication-card {{
         background: white;
         border-radius: 16px;
         padding: 20px;
         margin: 10px 0;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         transition: all 0.3s ease;
-        border-left: 4px solid #667eea;
-    }
+        border-left: 4px solid {primary_color};
+    }}
     
-    .medication-card:hover {
+    .medication-card:hover {{
         transform: translateY(-5px);
         box-shadow: 0 12px 24px rgba(0,0,0,0.15);
-    }
+    }}
     
-    .stat-card {
+    .stat-card {{
         background: white;
         border-radius: 20px;
         padding: 30px 24px;
         text-align: center;
         box-shadow: 0 8px 16px rgba(0,0,0,0.1);
         transition: all 0.3s ease;
-        border-top: 4px solid #667eea;
-    }
+        border-top: 4px solid {primary_color};
+    }}
     
-    .stat-card:hover {
+    .stat-card:hover {{
         transform: translateY(-8px);
         box-shadow: 0 16px 32px rgba(0,0,0,0.15);
-    }
+    }}
     
-    .stat-number {
+    .stat-number {{
         font-size: 56px;
         font-weight: 900;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, {primary_color} 0%, {secondary_color} 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
         line-height: 1.2;
         margin-bottom: 8px;
-    }
+    }}
     
-    .stat-label {
-        font-size: 16px;
+    .stat-label {{
+        font-size: {font_size};
         color: #6b7280;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-    }
+    }}
     
-    .auth-card {
-        background: white;
+    .auth-card {{
+        background: black;
         border-radius: 24px;
         padding: 40px;
         box-shadow: 0 20px 60px rgba(0,0,0,0.3);
         max-width: 500px;
         margin: 0 auto;
         border: 1px solid rgba(255,255,255,0.2);
-    }
+    }}
     
-    .stButton > button {
+    .stButton > button {{
         border-radius: 12px !important;
         font-weight: 600 !important;
         padding: 12px 24px !important;
         border: none !important;
         transition: all 0.3s ease !important;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
-    }
+        font-size: {font_size} !important;
+    }}
     
-    .stButton > button:hover {
+    .stButton > button:hover {{
         transform: translateY(-2px) !important;
         box-shadow: 0 8px 16px rgba(0,0,0,0.2) !important;
-    }
+    }}
     
-    .status-taken {
+    .status-taken {{
         background: linear-gradient(135deg, #10b981, #059669);
         color: white;
         padding: 6px 16px;
         border-radius: 20px;
-        font-size: 13px;
+        font-size: {font_size};
         font-weight: 700;
         display: inline-block;
         box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
-    }
+    }}
     
-    .status-missed {
+    .status-missed {{
         background: linear-gradient(135deg, #ef4444, #dc2626);
         color: white;
         padding: 6px 16px;
         border-radius: 20px;
-        font-size: 13px;
+        font-size: {font_size};
         font-weight: 700;
         display: inline-block;
         box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
-    }
+    }}
     
-    .status-upcoming {
+    .status-upcoming {{
         background: linear-gradient(135deg, #f59e0b, #d97706);
         color: white;
         padding: 6px 16px;
         border-radius: 20px;
-        font-size: 13px;
+        font-size: {font_size};
         font-weight: 700;
         display: inline-block;
         box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
-    }
+    }}
     
-    .status-pending {
+    .status-pending {{
         background: linear-gradient(135deg, #3b82f6, #2563eb);
         color: white;
         padding: 6px 16px;
         border-radius: 20px;
-        font-size: 13px;
+        font-size: {font_size};
         font-weight: 700;
         display: inline-block;
         box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
-    }
+    }}
     
-    @keyframes float {
-        0%, 100% { transform: translateY(0px); }
-        50% { transform: translateY(-20px); }
-    }
+    @keyframes float {{
+        0%, 100% {{ transform: translateY(0px); }}
+        50% {{ transform: translateY(-20px); }}
+    }}
     
-    .turtle-container {
+    .turtle-container {{
         animation: float 3s ease-in-out infinite;
-    }
+    }}
     
-    .stProgress > div > div > div {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%) !important;
+    .stProgress > div > div > div {{
+        background: linear-gradient(90deg, {primary_color} 0%, {secondary_color} 100%) !important;
         border-radius: 10px !important;
-    }
+    }}
     
-    .color-dot {
+    .color-dot {{
         width: 16px;
         height: 16px;
         border-radius: 50%;
         display: inline-block;
         margin-right: 8px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    }
+    }}
     </style>
     """
     return css
 
-# ============================================
-# CHART FUNCTIONS
-# ============================================
 
 def create_adherence_line_chart(adherence_history, age_category='adult'):
     """Create line chart showing adherence over time"""
@@ -962,9 +1161,7 @@ def create_weekly_heatmap(medication_history):
     )
     return fig
 
-# ============================================
-# AUTHENTICATION PAGES
-# ============================================
+
 
 def account_type_selection_page():
     """Landing page for selecting account type"""
@@ -1099,9 +1296,7 @@ def caregiver_login_page():
         
         st.markdown("</div>", unsafe_allow_html=True)
 
-# ============================================
-# SIGNUP PAGES
-# ============================================
+
 
 def patient_signup_page():
     """Multi-step patient signup page"""
@@ -1220,21 +1415,46 @@ def patient_signup_page():
                 "Every 12 hours", "As needed", "Weekly", "Monthly"
             ], key="frequency_select")
             
-            time = st.time_input("Time", value=datetime.strptime("09:00", "%H:%M").time(), key="time_input")
+            # Schedule times feature
+            st.markdown("### ⏰ Schedule Times")
+            st.info("Set specific times for each dose")
+            
+            default_times = get_custom_medication_times(frequency.lower().replace(' ', '-'))
+            reminder_times_input = []
+            
+            time_inputs_container = st.container()
+            with time_inputs_container:
+                for i, default_time in enumerate(default_times):
+                    time_label = f"Time {i+1}"
+                    if len(default_times) == 1:
+                        time_label = "Medication Time"
+                    elif len(default_times) == 2:
+                        time_label = ["Morning Time", "Evening Time"][i]
+                    elif len(default_times) == 3:
+                        time_label = ["Morning Time", "Afternoon Time", "Evening Time"][i]
+                    
+                    time_input = st.time_input(time_label, value=datetime.strptime(default_time, "%H:%M").time(), key=f"signup_time_{i}")
+                    reminder_times_input.append(time_input.strftime("%H:%M"))
+            
             color = st.selectbox("Color", ["Blue", "Green", "Purple", "Pink", "Orange", "Red", "Yellow", "Indigo"], key="color_select")
             
             if st.button("➕ Add Medication"):
                 if med_name and dosage_amount:
-                    st.session_state.signup_data['medications'].append({
+                    med_data = {
                         'id': len(st.session_state.signup_data['medications']) + 1,
                         'name': med_name,
                         'dosageType': dosage_type.lower(),
                         'dosageAmount': dosage_amount,
                         'frequency': frequency.lower().replace(' ', '-'),
-                        'time': time.strftime("%H:%M"),
+                        'time': reminder_times_input[0] if reminder_times_input else '09:00',
                         'color': color.lower(),
                         'taken_today': False
-                    })
+                    }
+                    
+                    if len(reminder_times_input) > 1:
+                        med_data['reminder_times'] = reminder_times_input
+                    
+                    st.session_state.signup_data['medications'].append(med_data)
                     st.rerun()
             
             if st.session_state.signup_data['medications']:
@@ -1242,7 +1462,8 @@ def patient_signup_page():
                 for i, med in enumerate(st.session_state.signup_data['medications']):
                     col_a, col_b = st.columns([4, 1])
                     with col_a:
-                        st.markdown(f"- {med['name']} ({med['dosageAmount']}) at {med['time']}")
+                        times_str = med.get('reminder_times', [med['time']])
+                        st.markdown(f"- {med['name']} ({med['dosageAmount']}) at {', '.join(times_str)}")
                     with col_b:
                         if st.button("🗑️", key=f"del_med_{i}"):
                             st.session_state.signup_data['medications'].pop(i)
@@ -1367,13 +1588,19 @@ def patient_dashboard_page():
     age_category = get_age_category(age)
     greeting = get_time_of_day()
     
+    # Inject age-based CSS
+    st.markdown(inject_custom_css(age_category), unsafe_allow_html=True)
+    
     col1, col2, col3 = st.columns([2, 4, 2])
     
     with col1:
         st.markdown(f"<h2>👋 {greeting}, {st.session_state.user_profile['name']}</h2>", unsafe_allow_html=True)
     
     with col2:
-        st.markdown(f"<div class='turtle-container'><p style='text-align: center; font-size: 48px;'>{get_turtle_emoji(st.session_state.turtle_mood)}</p></div>", unsafe_allow_html=True)
+       mascot_img = get_mascot_image(st.session_state.turtle_mood)
+       st.image(mascot_img, width=90)
+
+
     
     with col3:
         if st.button("🚪 Logout", use_container_width=True):
@@ -1407,10 +1634,21 @@ def patient_dashboard_page():
     
     with tab7:
         analytics_tab(age_category)
+def get_mascot_text_color(mood):
+    colors = {
+        'excited': '#10b981',   # green
+        'happy': '#22c55e',
+        'neutral': '#f59e0b',   # amber
+        'worried': '#ef4444'    # red
+    }
+    return colors.get(mood, '#374151')
 
 def dashboard_overview_tab(age_category):
     """Dashboard overview with stats and today's schedule"""
     st.markdown("### 📊 Your Health Overview")
+    
+    # Categorize medications
+    missed, upcoming, taken = categorize_medications_by_status()
     
     col1, col2, col3, col4 = st.columns(4)
     
@@ -1418,6 +1656,9 @@ def dashboard_overview_tab(age_category):
     taken_today = sum(1 for med in st.session_state.medications if med.get('taken_today', False))
     total_appointments = len(st.session_state.appointments)
     adherence = calculate_adherence(st.session_state.medications)
+    
+    # Update mascot mood based on adherence
+    update_mascot_mood(adherence)
     
     with col1:
         st.markdown(f"""
@@ -1444,14 +1685,79 @@ def dashboard_overview_tab(age_category):
         """, unsafe_allow_html=True)
     
     with col4:
+        adherence_color = "#10b981" if adherence >= 70 else "#f59e0b" if adherence >= 50 else "#ef4444"
         st.markdown(f"""
         <div class='stat-card'>
-            <div class='stat-number'>{adherence:.0f}%</div>
+            <div class='stat-number' style='background: linear-gradient(135deg, {adherence_color}, {adherence_color}88);'>{adherence:.0f}%</div>
             <div class='stat-label'>Adherence</div>
         </div>
         """, unsafe_allow_html=True)
     
     st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Mascot Message Section
+    mood, mascot_img = update_mascot_status()
+    mascot_message = get_random_mascot_message(mood)
+    st.markdown(f"""
+<div style="
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: white;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 6px 12px rgba(0,0,0,0.12);
+">
+    <img src="{mascot_img}" width="120"
+         style="filter: drop-shadow(0 4px 8px rgba(0,0,0,0.2));">
+    <p style="font-size:18px; margin-top:10px; text-align:center;">
+        {mascot_message}
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Medication Status Cards
+    st.markdown("### 📋 Medication Status Today")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        missed_count = len(missed)
+        st.markdown(f"""
+        <div class='stat-card' style='border-top-color: #ef4444;'>
+            <div class='stat-number' style='background: linear-gradient(135deg, #ef4444, #dc2626);'>{missed_count}</div>
+            <div class='stat-label'>❌ Missed</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        upcoming_count = len(upcoming)
+        st.markdown(f"""
+        <div class='stat-card' style='border-top-color: #f59e0b;'>
+            <div class='stat-number' style='background: linear-gradient(135deg, #f59e0b, #d97706);'>{upcoming_count}</div>
+            <div class='stat-label'>⏰ Upcoming</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        taken_count = len(taken)
+        st.markdown(f"""
+        <div class='stat-card' style='border-top-color: #10b981;'>
+            <div class='stat-number' style='background: linear-gradient(135deg, #10b981, #059669);'>{taken_count}</div>
+            <div class='stat-label'>✅ Taken</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Check for upcoming reminders
+    has_upcoming_reminder = check_upcoming_reminders(upcoming)
+    
+    if has_upcoming_reminder:
+        st.markdown("<br>", unsafe_allow_html=True)
     
     col1, col2 = st.columns(2)
     
@@ -1462,47 +1768,60 @@ def dashboard_overview_tab(age_category):
         st.plotly_chart(create_medication_pie_chart(st.session_state.medications, age_category), use_container_width=True)
     
     st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Detailed Medication Schedule with Status
     st.markdown("### 📅 Today's Medication Schedule")
     
     if st.session_state.medications:
-        sorted_meds = sorted(st.session_state.medications, key=lambda x: x.get('time', '00:00'))
-        
-        for med in sorted_meds:
-            col_a, col_b, col_c, col_d, col_e = st.columns([3, 2, 2, 2, 1])
-            
-            with col_a:
+        # Show missed medications first (red)
+        if missed:
+            st.markdown("#### ❌ Missed Medications")
+            for med in missed:
                 color_hex = get_medication_color_hex(med.get('color', 'blue'))
-                st.markdown(
-                    f"<div style='display: flex; align-items: center;'>"
-                    f"<div class='color-dot' style='background-color: {color_hex};'></div>"
-                    f"<strong>{med['name']}</strong> ({med['dosageAmount']})"
-                    f"</div>",
-                    unsafe_allow_html=True
-                )
-            
-            with col_b:
-                st.markdown(f"🕐 {format_time(med.get('time', 'N/A'))}")
-            
-            with col_c:
-                st.markdown(f"📦 {med.get('dosageType', 'pill').capitalize()}")
-            
-            with col_d:
-                if med.get('taken_today', False):
-                    st.markdown('<span class="status-taken">✅ Taken</span>', unsafe_allow_html=True)
-                else:
-                    st.markdown('<span class="status-pending">⏰ Pending</span>', unsafe_allow_html=True)
-            
-            with col_e:
-                if not med.get('taken_today', False):
-                    if st.button("✓", key=f"take_{med['id']}"):
-                        med['taken_today'] = True
-                        st.session_state.turtle_mood = 'excited'
-                        update_medication_history(med['id'], 'taken')
-                        update_adherence_history()
-                        save_user_data()
-                        st.rerun()
-            
-            st.markdown("<hr style='margin: 8px 0; opacity: 0.2;'>", unsafe_allow_html=True)
+                st.markdown(f"""
+                <div class='medication-card' style='border-left: 4px solid #ef4444; background: linear-gradient(to right, #fef2f2, white);'>
+                    <div style='display: flex; align-items: center;'>
+                        <div class='color-dot' style='background-color: {color_hex};'></div>
+                        <strong>{med['name']}</strong> ({med['dosageAmount']})
+                    </div>
+                    <p style='margin: 5px 0;'>⏰ {format_time(med['time'])}</p>
+                    <span class='status-missed'>❌ Missed</span>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        # Show upcoming medications (yellow)
+        if upcoming:
+            st.markdown("#### ⏰ Upcoming Medications")
+            for med in upcoming:
+                color_hex = get_medication_color_hex(med.get('color', 'blue'))
+                st.markdown(f"""
+                <div class='medication-card' style='border-left: 4px solid #f59e0b; background: linear-gradient(to right, #fffbeb, white);'>
+                    <div style='display: flex; align-items: center; justify-content: space-between;'>
+                        <div style='display: flex; align-items: center;'>
+                            <div class='color-dot' style='background-color: {color_hex};'></div>
+                            <strong>{med['name']}</strong> ({med['dosageAmount']})
+                        </div>
+                        <span class='status-upcoming'>⏰ Upcoming</span>
+                    </div>
+                    <p style='margin: 5px 0;'>⏰ {format_time(med['time'])}</p>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        # Show taken medications (green)
+        if taken:
+            st.markdown("#### ✅ Taken Medications")
+            for med in taken:
+                color_hex = get_medication_color_hex(med.get('color', 'blue'))
+                st.markdown(f"""
+                <div class='medication-card' style='border-left: 4px solid #10b981; background: linear-gradient(to right, #ecfdf5, white);'>
+                    <div style='display: flex; align-items: center;'>
+                        <div class='color-dot' style='background-color: {color_hex};'></div>
+                        <strong>{med['name']}</strong> ({med['dosageAmount']})
+                    </div>
+                    <p style='margin: 5px 0;'>⏰ {format_time(med.get('time', 'N/A'))}</p>
+                    <span class='status-taken'>✅ Taken</span>
+                </div>
+                """, unsafe_allow_html=True)
     else:
         st.info("No medications scheduled. Add medications in the Medications tab.")
 
@@ -1539,6 +1858,92 @@ def medications_tab():
     """Medications tab content"""
     st.markdown("### 💊 Your Medications")
     
+    # Initialize edit mode in session state
+    if 'editing_medication' not in st.session_state:
+        st.session_state.editing_medication = None
+    
+    # Edit medication modal
+    if st.session_state.editing_medication:
+        med_to_edit = st.session_state.editing_medication
+        st.markdown("### ✏️ Edit Medication")
+        
+        with st.form("edit_medication_form"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                edit_name = st.text_input("Medication Name", value=med_to_edit['name'], key="edit_name")
+                edit_dosage_type = st.selectbox("Type", ["pill", "liquid", "injection", "other"], 
+                                               index=["pill", "liquid", "injection", "other"].index(med_to_edit.get('dosageType', 'pill')),
+                                               key="edit_dosage_type")
+                edit_dosage_amount = st.text_input("Dosage Amount", value=med_to_edit['dosageAmount'], key="edit_dosage_amount")
+                edit_instructions = st.text_area("Instructions (optional)", value=med_to_edit.get('instructions', ''), key="edit_instructions")
+            
+            with col2:
+                edit_frequency = st.selectbox("Frequency", [
+                    "once-daily", "twice-daily", "three-times-daily",
+                    "every-4-hours", "every-6-hours", "every-8-hours",
+                    "every-12-hours", "as-needed", "weekly", "monthly"
+                ], 
+                index=["once-daily", "twice-daily", "three-times-daily",
+                       "every-4-hours", "every-6-hours", "every-8-hours",
+                       "every-12-hours", "as-needed", "weekly", "monthly"].index(med_to_edit.get('frequency', 'once-daily')),
+                key="edit_frequency")
+                
+                # Schedule times feature
+                st.markdown("### ⏰ Schedule Times")
+                st.info("Set specific times for each dose")
+                
+                default_times = get_custom_medication_times(edit_frequency)
+                reminder_times_input = []
+                
+                time_inputs_container = st.container()
+                with time_inputs_container:
+                    for i, default_time in enumerate(default_times):
+                        time_label = f"Time {i+1}"
+                        if len(default_times) == 1:
+                            time_label = "Medication Time"
+                        elif len(default_times) == 2:
+                            time_label = ["Morning Time", "Evening Time"][i]
+                        elif len(default_times) == 3:
+                            time_label = ["Morning Time", "Afternoon Time", "Evening Time"][i]
+                        
+                        time_input = st.time_input(time_label, value=datetime.strptime(default_time, "%H:%M").time(), key=f"edit_time_{i}")
+                        reminder_times_input.append(time_input.strftime("%H:%M"))
+                
+                edit_color = st.selectbox("Color Indicator", [
+                    "Blue", "Green", "Purple", "Pink", "Orange", "Red", "Yellow", "Indigo"
+                ],
+                index=["Blue", "Green", "Purple", "Pink", "Orange", "Red", "Yellow", "Indigo"].index(med_to_edit.get('color', 'blue').capitalize()),
+                key="edit_color")
+            
+            col_submit, col_cancel = st.columns(2)
+            with col_submit:
+                if st.form_submit_button("💾 Save Changes", use_container_width=True):
+                    # Update the medication
+                    for med in st.session_state.medications:
+                        if med['id'] == med_to_edit['id']:
+                            med['name'] = edit_name
+                            med['dosageType'] = edit_dosage_type
+                            med['dosageAmount'] = edit_dosage_amount
+                            med['frequency'] = edit_frequency
+                            med['time'] = reminder_times_input[0] if reminder_times_input else med_to_edit['time']
+                            med['color'] = edit_color.lower()
+                            med['instructions'] = edit_instructions
+                            if len(reminder_times_input) > 1:
+                                med['reminder_times'] = reminder_times_input
+                            break
+                    
+                    save_user_data()
+                    st.session_state.editing_medication = None
+                    st.success("Medication updated successfully!")
+                    st.rerun()
+            
+            with col_cancel:
+                if st.form_submit_button("❌ Cancel", use_container_width=True):
+                    st.session_state.editing_medication = None
+                    st.rerun()
+    
+    # Add new medication form
     with st.expander("➕ Add New Medication", expanded=False):
         col1, col2 = st.columns(2)
         
@@ -1554,7 +1959,28 @@ def medications_tab():
                 "every-4-hours", "every-6-hours", "every-8-hours",
                 "every-12-hours", "as-needed", "weekly", "monthly"
             ], key="new_frequency")
-            new_time = st.time_input("Time", key="new_time")
+            
+            # Schedule times feature
+            st.markdown("### ⏰ Schedule Times")
+            st.info("Set specific times for each dose")
+            
+            default_times = get_custom_medication_times(new_frequency)
+            reminder_times_input = []
+            
+            time_inputs_container = st.container()
+            with time_inputs_container:
+                for i, default_time in enumerate(default_times):
+                    time_label = f"Time {i+1}"
+                    if len(default_times) == 1:
+                        time_label = "Medication Time"
+                    elif len(default_times) == 2:
+                        time_label = ["Morning Time", "Evening Time"][i]
+                    elif len(default_times) == 3:
+                        time_label = ["Morning Time", "Afternoon Time", "Evening Time"][i]
+                    
+                    time_input = st.time_input(time_label, value=datetime.strptime(default_time, "%H:%M").time(), key=f"new_time_{i}")
+                    reminder_times_input.append(time_input.strftime("%H:%M"))
+            
             new_color = st.selectbox("Color Indicator", [
                 "Blue", "Green", "Purple", "Pink", "Orange", "Red", "Yellow", "Indigo"
             ], key="new_color")
@@ -1567,12 +1993,15 @@ def medications_tab():
                     'dosageType': new_dosage_type,
                     'dosageAmount': new_dosage_amount,
                     'frequency': new_frequency,
-                    'time': new_time.strftime("%H:%M"),
+                    'time': reminder_times_input[0] if reminder_times_input else '09:00',
                     'color': new_color.lower(),
                     'instructions': new_instructions,
                     'taken_today': False,
                     'created_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 }
+                
+                if len(reminder_times_input) > 1:
+                    new_med['reminder_times'] = reminder_times_input
                 
                 conflicts = check_medication_conflicts(st.session_state.medications, new_med)
                 if conflicts:
@@ -1623,6 +2052,8 @@ def medications_tab():
                 st.markdown(f"### {med['name']}")
                 st.markdown(f"**Dosage:** {med['dosageAmount']} | **Type:** {med['dosageType'].capitalize()}")
                 st.markdown(f"**Time:** {med['time']} | **Frequency:** {med['frequency'].replace('-', ' ').title()}")
+                if med.get('reminder_times'):
+                    st.markdown(f"**Schedule Times:** {', '.join(med['reminder_times'])}")
                 if med.get('instructions'):
                     st.markdown(f"**Instructions:** {med['instructions']}")
             
@@ -1636,6 +2067,11 @@ def medications_tab():
                 )
             
             with col3:
+                # Edit button
+                if st.button("✏️", key=f"edit_{med['id']}", help="Edit"):
+                    st.session_state.editing_medication = med
+                    st.rerun()
+                
                 if st.button("🗑️", key=f"delete_{med['id']}", help="Delete"):
                     st.session_state.medications = [m for m in st.session_state.medications if m['id'] != med['id']]
                     save_user_data()
@@ -1644,6 +2080,7 @@ def medications_tab():
                 if not med.get('taken_today', False):
                     if st.button("✓ Take", key=f"take_med_{med['id']}", use_container_width=True):
                         med['taken_today'] = True
+                        play_reminder_sound()  # Play sound when medication is taken
                         update_medication_history(med['id'], 'taken')
                         update_adherence_history()
                         save_user_data()
@@ -2270,8 +2707,14 @@ def main():
     # Initialize session state
     initialize_session_state()
     
-    # Inject CSS
-    st.markdown(inject_custom_css(), unsafe_allow_html=True)
+    # Get age category for styling
+    age_category = 'adult'  # Default
+    if st.session_state.user_profile:
+        age = st.session_state.user_profile.get('age', 25)
+        age_category = get_age_category(age)
+    
+    # Inject CSS with age-based styling
+    st.markdown(inject_custom_css(age_category), unsafe_allow_html=True)
     
     # Route to appropriate page
     page = st.session_state.page
@@ -2295,4 +2738,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
