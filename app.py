@@ -61,6 +61,7 @@ def init_database():
                   instructions TEXT,
                   taken_today INTEGER,
                   created_at TEXT,
+                  taken_time_slots TEXT,
                   FOREIGN KEY(username) REFERENCES users(username))''')
     
     c.execute('''CREATE TABLE IF NOT EXISTS appointments
@@ -102,23 +103,6 @@ def init_database():
                   date TEXT,
                   adherence REAL,
                   updated TEXT,
-                  FOREIGN KEY(username) REFERENCES users(username))''')
-    
-    c.execute('''CREATE TABLE IF NOT EXISTS connected_patients
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  caregiver_username TEXT,
-                  patient_username TEXT,
-                  access_code TEXT,
-                  connected_at TEXT,
-                  FOREIGN KEY(caregiver_username) REFERENCES users(username))''')
-    
-    c.execute('''CREATE TABLE IF NOT EXISTS reminders
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  username TEXT,
-                  medication_id INTEGER,
-                  reminder_time TEXT,
-                  acknowledged INTEGER DEFAULT 0,
-                  created_at TEXT,
                   FOREIGN KEY(username) REFERENCES users(username))''')
     
     conn.commit()
@@ -234,9 +218,10 @@ def play_notification_sound():
     st.markdown(audio_html, unsafe_allow_html=True)
 
 def categorize_medications_by_status():
-    """Categorize medications into missed, upcoming, and taken"""
+    """Categorize medications into missed, upcoming, and taken - FIXED VERSION"""
     now = datetime.now()
     current_time = now.strftime("%H:%M")
+    today = now.strftime("%Y-%m-%d")
     
     missed = []
     upcoming = []
@@ -244,64 +229,63 @@ def categorize_medications_by_status():
     
     for med in st.session_state.medications:
         med_time = med.get('time', '00:00')
-        
-        # Track which time slots have been taken
         taken_time_slots = med.get('taken_time_slots', [])
         
-        if med.get('reminder_times'):
-            for time_slot in med['reminder_times']:
-                if time_slot in taken_time_slots:
-                    # This specific time slot has been taken
-                    continue
-                elif time_slot < current_time:
-                    # Missed this time slot
-                    if not any(m['id'] == med['id'] and m['time'] == time_slot for m in missed):
-                        missed.append({
-                            'id': med['id'],
-                            'name': med['name'],
-                            'time': time_slot,
-                            'dosageAmount': med['dosageAmount'],
-                            'color': med.get('color', 'blue'),
-                            'unique_key': f"{med['id']}_{time_slot.replace(':', '')}"
-                        })
-                elif time_slot > current_time:
-                    # Upcoming time slot
-                    if not any(m['id'] == med['id'] and m['time'] == time_slot for m in upcoming):
-                        upcoming.append({
-                            'id': med['id'],
-                            'name': med['name'],
-                            'time': time_slot,
-                            'dosageAmount': med['dosageAmount'],
-                            'color': med.get('color', 'blue'),
-                            'unique_key': f"{med['id']}_{time_slot.replace(':', '')}"
-                        })
+        # Check if this medication was actually taken today
+        # Only consider taken_today if explicitly set to True
+        is_medication_taken = med.get('taken_today', False) == True
         
-        # Handle the main medication time
-        if med.get('taken_today', False):
-            taken.append(med)
-        elif med_time < current_time and med_time not in taken_time_slots:
-            # Missed main time and not taken yet
-            if not any(m['id'] == med['id'] and m['time'] == med_time for m in missed):
-                missed.append({
-                    'id': med['id'],
-                    'name': med['name'],
-                    'time': med_time,
-                    'dosageAmount': med['dosageAmount'],
-                    'color': med.get('color', 'blue'),
-                    'unique_key': f"{med['id']}_{med_time.replace(':', '')}"
-                })
-        elif med_time > current_time and med_time not in taken_time_slots:
-            # Upcoming main time and not taken yet
-            if not any(m['id'] == med['id'] and m['time'] == med_time for m in upcoming):
-                upcoming.append({
-                    'id': med['id'],
-                    'name': med['name'],
-                    'time': med_time,
-                    'dosageAmount': med['dosageAmount'],
-                    'color': med.get('color', 'blue'),
-                    'unique_key': f"{med['id']}_{med_time.replace(':', '')}"
-                })
+        # Get all times for this medication (main time + reminder times)
+        all_times = [med_time]
+        if med.get('reminder_times'):
+            all_times.extend(med['reminder_times'])
+        
+        # Sort times for proper processing
+        all_times_sorted = sorted(all_times)
+        
+        for time_slot in all_times_sorted:
+            # Skip if this specific time slot was taken
+            if time_slot in taken_time_slots:
+                continue
+            
+            # Create unique key for this medication-time combination
+            unique_key = f"{med['id']}_{time_slot.replace(':', '')}"
+            
+            # Determine status based on time comparison
+            time_obj = datetime.strptime(time_slot, "%H:%M")
+            current_obj = datetime.strptime(current_time, "%H:%M")
+            
+            if time_obj < current_obj:
+                # Time has passed and not taken - this is MISSED
+                if not any(m['unique_key'] == unique_key for m in missed):
+                    missed.append({
+                        'id': med['id'],
+                        'name': med['name'],
+                        'time': time_slot,
+                        'dosageAmount': med['dosageAmount'],
+                        'color': med.get('color', 'blue'),
+                        'unique_key': unique_key
+                    })
+            elif time_obj > current_obj:
+                # Time is in the future - this is UPCOMING
+                if not any(m['unique_key'] == unique_key for m in upcoming):
+                    upcoming.append({
+                        'id': med['id'],
+                        'name': med['name'],
+                        'time': time_slot,
+                        'dosageAmount': med['dosageAmount'],
+                        'color': med.get('color', 'blue'),
+                        'unique_key': unique_key
+                    })
+            # If time_obj == current_obj, it's due NOW - add to upcoming for "Take Now" action
+        
+        # If medication is fully taken (all time slots taken or taken_today=True), add to taken list
+        if is_medication_taken and len(taken_time_slots) >= len(all_times_sorted):
+            # Only add if not already in taken list
+            if not any(m['id'] == med['id'] for m in taken):
+                taken.append(med)
     
+    # Sort by time
     missed.sort(key=lambda x: x['time'])
     upcoming.sort(key=lambda x: x['time'])
     
@@ -446,12 +430,23 @@ def check_due_medications(medications):
     return due_medications
 
 def calculate_adherence(medications):
-    """Calculate medication adherence percentage"""
+    """Calculate medication adherence percentage - FIXED"""
     if not medications:
         return 0
-    taken = sum(1 for med in medications if med.get('taken_today', False))
-    total = len(medications)
-    return (taken / total * 100) if total > 0 else 0
+    
+    total_doses = 0
+    taken_doses = 0
+    
+    for med in medications:
+        # Count total doses for this medication (main time + reminder times)
+        total_doses += 1  # main time
+        if med.get('reminder_times'):
+            total_doses += len(med['reminder_times'])
+        
+        # Count taken doses
+        taken_doses += len(med.get('taken_time_slots', []))
+    
+    return (taken_doses / total_doses * 100) if total_doses > 0 else 0
 
 def get_mascot_image(mood):
     mascot_images = {
@@ -566,13 +561,13 @@ def initialize_session_state():
     if 'last_action' not in st.session_state:
         st.session_state.last_action = None
     
-    # NEW: Initialize taken_time_slots for all existing medications
+    # Initialize taken_time_slots for all existing medications
     for med in st.session_state.medications:
         if 'taken_time_slots' not in med:
             med['taken_time_slots'] = []
 
 def save_user_data():
-    """Save user data to SQLite database"""
+    """Save user data to SQLite database - FIXED"""
     if not st.session_state.user_profile:
         return False
     
@@ -608,12 +603,13 @@ def save_user_data():
             taken_slots_json = json.dumps(med.get('taken_time_slots', []))
             
             c.execute('''INSERT INTO medications 
-                         (username, name, dosage_type, dosage_amount, frequency, time, color, instructions, taken_today, created_at)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                         (username, name, dosage_type, dosage_amount, frequency, time, color, instructions, taken_today, created_at, taken_time_slots)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                      (username, med.get('name'), med.get('dosageType'), med.get('dosageAmount'),
                       med.get('frequency'), med.get('time'), med.get('color'),
                       med.get('instructions', ''), int(med.get('taken_today', False)),
-                      med.get('created_at', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))))
+                      med.get('created_at', datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+                      taken_slots_json))
         
         c.execute('DELETE FROM appointments WHERE username = ?', (username,))
         for appt in st.session_state.appointments:
@@ -641,7 +637,7 @@ def save_user_data():
         return False
 
 def load_user_data(username):
-    """Load user data from SQLite database"""
+    """Load user data from SQLite database - FIXED"""
     try:
         conn = get_db_connection()
         c = conn.cursor()
@@ -681,7 +677,13 @@ def load_user_data(username):
         meds = c.fetchall()
         st.session_state.medications = []
         for med in meds:
-            # Initialize taken_time_slots as empty list for loaded medications
+            # Deserialize taken_time_slots from JSON
+            taken_slots_json = med[11] if len(med) > 11 else '[]'
+            try:
+                taken_time_slots = json.loads(taken_slots_json)
+            except:
+                taken_time_slots = []
+            
             med_obj = {
                 'id': med[0],
                 'name': med[2],
@@ -693,7 +695,7 @@ def load_user_data(username):
                 'instructions': med[8],
                 'taken_today': bool(med[9]),
                 'created_at': med[10],
-                'taken_time_slots': []  # Initialize empty taken_time_slots
+                'taken_time_slots': taken_time_slots
             }
             st.session_state.medications.append(med_obj)
         
@@ -848,9 +850,25 @@ def undo_last_action():
     
     if last_action['action_type'] == 'medication_taken':
         med_id = last_action['data']['med_id']
+        time_slot = last_action['data'].get('time')
         for med in st.session_state.medications:
             if med['id'] == med_id:
-                med['taken_today'] = False
+                # Remove specific time slot from taken_time_slots
+                if time_slot and time_slot in med.get('taken_time_slots', []):
+                    med['taken_time_slots'].remove(time_slot)
+                
+                # Check if medication should still be marked as taken
+                all_slots_taken = True
+                all_times = [med.get('time', '00:00')]
+                if med.get('reminder_times'):
+                    all_times.extend(med['reminder_times'])
+                
+                for slot in all_times:
+                    if slot not in med.get('taken_time_slots', []):
+                        all_slots_taken = False
+                        break
+                
+                med['taken_today'] = all_slots_taken
                 update_medication_history(med_id, 'untaken')
                 update_adherence_history()
                 save_user_data()
@@ -1306,7 +1324,7 @@ def create_side_effects_bar_chart(side_effects):
     return fig
 
 def create_medication_status_donut(medications):
-    """Create donut chart showing taken vs pending medications"""
+    """Create donut chart showing taken vs pending medications - FIXED"""
     if not medications:
         fig = go.Figure()
         fig.add_annotation(
@@ -1317,11 +1335,19 @@ def create_medication_status_donut(medications):
         fig.update_layout(height=400, plot_bgcolor='white', paper_bgcolor='white')
         return fig
     
-    taken = sum(1 for med in medications if med.get('taken_today', False))
-    pending = len(medications) - taken
+    total_doses = 0
+    taken_doses = 0
+    
+    for med in medications:
+        total_doses += 1  # main time
+        if med.get('reminder_times'):
+            total_doses += len(med['reminder_times'])
+        taken_doses += len(med.get('taken_time_slots', []))
+    
+    pending_doses = total_doses - taken_doses
     
     labels = ['Taken ✅', 'Pending ⏰']
-    values = [taken, pending]
+    values = [taken_doses, pending_doses]
     colors = ['#10b981', '#f59e0b']
     
     fig = go.Figure(data=[go.Pie(
@@ -1331,14 +1357,15 @@ def create_medication_status_donut(medications):
         hovertemplate='<b>%{label}</b><br>Count: %{value}<br>Percentage: %{percent}<extra></extra>'
     )])
     
+    percentage = (taken_doses / total_doses * 100) if total_doses > 0 else 0
     fig.add_annotation(
-        text=f"{(taken/len(medications)*100):.0f}%<br>Complete",
+        text=f"{percentage:.0f}%<br>Complete",
         x=0.5, y=0.5, font=dict(size=24, color='#1f2937', family='Arial Black'),
         showarrow=False
     )
     
     fig.update_layout(
-        title={'text': '📊 Today\'s Progress', 'font': {'size': 24, 'color': '#1f2937', 'family': 'Arial Black'}},
+        title={'text': "📊 Today's Progress", 'font': {'size': 24, 'color': '#1f2937', 'family': 'Arial Black'}},
         height=450, paper_bgcolor='white', showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=-0.1, xanchor="center", x=0.5)
     )
@@ -1523,7 +1550,6 @@ def generate_pdf_report(report_data, report_type="Complete Health Report"):
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
-
 def account_type_selection_page():
     """Landing page for selecting account type"""
     st.markdown("<h1 style='text-align: center; margin-top: 50px; color: white;'>🏥 Welcome to MedTimer</h1>", unsafe_allow_html=True)
@@ -1804,7 +1830,8 @@ def patient_signup_page():
                         'frequency': frequency.lower().replace(' ', '-'),
                         'time': reminder_times_input[0] if reminder_times_input else '09:00',
                         'color': color.lower(),
-                        'taken_today': False
+                        'taken_today': False,
+                        'taken_time_slots': []
                     }
                     
                     if len(reminder_times_input) > 1:
@@ -1929,6 +1956,7 @@ def caregiver_signup_page():
         
         st.markdown("</div>", unsafe_allow_html=True)
 
+
 def get_mascot_text_color(mood):
     colors = {
         'excited': '#10b981',  
@@ -1950,11 +1978,9 @@ def display_datetime_header():
         <p>{current_date}</p>
     </div>
     """, unsafe_allow_html=True)
-    
-    # REMOVED: time.sleep(0.1) and st.rerun() - This was causing the infinite loop
 
 def dashboard_overview_tab(age_category):
-    """Dashboard overview with stats and today's schedule"""
+    """Dashboard overview with stats and today's schedule - FIXED"""
     st.markdown("<h3 style='color: #ffffff;'>📊 Your Health Overview</h3>", unsafe_allow_html=True)
     
     # Display real-time date/time
@@ -1965,7 +1991,7 @@ def dashboard_overview_tab(age_category):
     col1, col2, col3, col4 = st.columns(4)
     
     total_meds = len(st.session_state.medications)
-    taken_today = sum(1 for med in st.session_state.medications if med.get('taken_today', False))
+    taken_today = len(taken)
     total_appointments = len(st.session_state.appointments)
     adherence = calculate_adherence(st.session_state.medications)
     
@@ -2134,6 +2160,7 @@ def dashboard_overview_tab(age_category):
     
     st.markdown("<br>", unsafe_allow_html=True)
     
+    # FIXED: Show missed medications section
     st.markdown("<h3 style='color: #ffffff;'>### 📅 Active Reminders</h3>", unsafe_allow_html=True)
     if st.session_state.medications:
         
@@ -2212,7 +2239,7 @@ def dashboard_overview_tab(age_category):
                 col1, col2 = st.columns([3, 1])
                 with col2:
                     unique_key = med.get('unique_key', f"upcoming_{med['id']}")
-                    if st.button("\u2713 Take Now", key=f"take_upcoming_{unique_key}", use_container_width=True):
+                    if st.button("✓ Take Now", key=f"take_upcoming_{unique_key}", use_container_width=True):
                         for m in st.session_state.medications:
                             if m['id'] == med['id']:
                                 # Initialize taken_time_slots if not exists
@@ -2267,6 +2294,8 @@ def dashboard_overview_tab(age_category):
     else:
         st.info("No medications scheduled. Add medications in the Medications tab.")
 
+
+
 def analytics_tab(age_category):
     """Analytics tab with comprehensive graphs"""
     st.markdown("<h3 style='color: #ffffff;'>📊 Medication Analytics & Insights</h3>", unsafe_allow_html=True)
@@ -2293,7 +2322,7 @@ def analytics_tab(age_category):
     st.plotly_chart(create_weekly_heatmap(st.session_state.get('medication_history', [])), use_container_width=True)
 
 def medications_tab():
-    """Medications tab content"""
+    """Medications tab content - FIXED"""
     st.markdown("<h3 style='color: #ffffff;'>💊 Your Medications</h3>", unsafe_allow_html=True)
     
     if st.session_state.editing_medication:
@@ -2424,6 +2453,7 @@ def medications_tab():
                     'color': new_color.lower(),
                     'instructions': new_instructions,
                     'taken_today': False,
+                    'taken_time_slots': [],
                     'created_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 }
                 
@@ -2650,6 +2680,591 @@ def appointments_tab():
             st.markdown("<br>", unsafe_allow_html=True)
     else:
         st.info("No appointments found.")
+
+def side_effects_tab():
+    """Side effects tab content"""
+    st.markdown("<h3 style='color: #ffffff;'>⚠️ Report & Track Side Effects</h3>", unsafe_allow_html=True)
+    
+    with st.expander("➕ Report New Side Effect", expanded=False):
+        if not st.session_state.medications:
+            st.warning("Please add medications first before reporting side effects.")
+        else:
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                effect_med = st.selectbox("Medication", [m['name'] for m in st.session_state.medications], key="effect_med")
+                effect_severity = st.select_slider("Severity Level", options=["Mild", "Moderate", "Severe"], key="effect_severity")
+            
+            with col2:
+                effect_type = st.selectbox("Type of Side Effect",
+                    ["Nausea", "Dizziness", "Headache", "Fatigue", "Rash", "Pain", "Other"],
+                    key="effect_type")
+                effect_date = st.date_input("Date Occurred", key="effect_date")
+            
+            effect_description = st.text_area("Description", key="effect_description",
+                placeholder="Describe the side effect in detail...")
+            
+            if effect_severity == "Severe":
+                st.error("⚠️ Severe side effects should be reported to your doctor immediately!")
+            elif effect_severity == "Moderate":
+                st.warning("⚠️ Consider consulting your doctor about this side effect.")
+            
+            if st.button("Report Side Effect", use_container_width=True, key="report_effect_btn"):
+                if effect_description:
+                    new_effect = {
+                        'id': len(st.session_state.side_effects) + 1,
+                        'medication': effect_med,
+                        'severity': effect_severity,
+                        'type': effect_type,
+                        'description': effect_description,
+                        'date': effect_date.strftime("%Y-%m-%d"),
+                        'reported_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    }
+                    
+                    st.session_state.side_effects.append(new_effect)
+                    save_user_data()
+                    st.success("Side effect reported successfully!")
+                    
+                    if effect_severity == "Severe":
+                        st.error("🚨 Please contact your doctor as soon as possible!")
+                    
+                    st.rerun()
+                else:
+                    st.warning("Please provide a description of the side effect")
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        severity_filter = st.selectbox("Filter by Severity", ["All", "Mild", "Moderate", "Severe"], key="severity_filter")
+    with col2:
+        sort_option = st.selectbox("Sort by", ["Most Recent", "Oldest First", "Severity"], key="sort_effects")
+    
+    filtered_effects = st.session_state.side_effects.copy()
+    
+    if severity_filter != "All":
+        filtered_effects = [e for e in filtered_effects if e.get('severity') == severity_filter]
+    
+    if sort_option == "Most Recent":
+        filtered_effects.sort(key=lambda x: x.get('date', ''), reverse=True)
+    elif sort_option == "Oldest First":
+        filtered_effects.sort(key=lambda x: x.get('date', ''))
+    elif sort_option == "Severity":
+        severity_order = {'Severe': 3, 'Moderate': 2, 'Mild': 1}
+        filtered_effects.sort(key=lambda x: severity_order.get(x.get('severity', 'Mild'), 0), reverse=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    if st.session_state.side_effects:
+        col1, col2, col3, col4 = st.columns(4)
+        total = len(st.session_state.side_effects)
+        mild = sum(1 for e in st.session_state.side_effects if e.get('severity') == 'Mild')
+        moderate = sum(1 for e in st.session_state.side_effects if e.get('severity') == 'Moderate')
+        severe = sum(1 for e in st.session_state.side_effects if e.get('severity') == 'Severe')
+        
+        with col1:
+            st.metric("Total Reports", total)
+        with col2:
+            st.metric("Mild", mild)
+        with col3:
+            st.metric("Moderate", moderate)
+        with col4:
+            st.metric("Severe", severe)
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+    
+    if filtered_effects:
+        for effect in filtered_effects:
+            severity = effect.get('severity', 'Mild')
+            severity_color = get_severity_color(severity)
+            severity_emoji = get_severity_emoji(severity)
+            
+            st.markdown(f"<div class='medication-card' style='border-left: 4px solid {severity_color};'>", unsafe_allow_html=True)
+            
+            col1, col2, col3 = st.columns([4, 2, 1])
+            
+            with col1:
+                st.markdown(f"### {severity_emoji} {effect['medication']}")
+                st.markdown(f"**Type:** {effect.get('type', 'Not specified')}")
+                st.markdown(f"**Severity:** {severity}")
+                st.markdown(f"**Date:** {effect['date']}")
+                st.markdown(f"**Description:** {effect['description']}")
+            
+            with col2:
+                st.markdown(f"""
+                <div style='text-align: center; padding: 16px; background-color: {severity_color}20; 
+                            border-radius: 12px; margin-top: 10px;'>
+                    <div style='font-size: 48px;'>{severity_emoji}</div>
+                    <div style='font-weight: 700; color: {severity_color};'>{severity}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col3:
+                if st.button("🗑️", key=f"delete_effect_{effect['id']}", help="Remove"):
+                    st.session_state.side_effects = [e for e in st.session_state.side_effects if e['id'] != effect['id']]
+                    save_user_data()
+                    st.rerun()
+            
+            st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
+    else:
+        if severity_filter != "All":
+            st.info(f"No {severity_filter.lower()} side effects reported. That's good!")
+        else:
+            st.success("No side effects reported. Great job! 🎉")
+
+def achievements_tab():
+    """Achievements tab content"""
+    st.markdown("<h3 style='color: #ffffff;'>🏆 Your Achievements & Badges</h3>", unsafe_allow_html=True)
+    
+    achievements_list = [
+        {'id': 'first_step', 'name': 'First Step', 'description': 'Created your MedTimer account',
+         'icon': '🎯', 'earned': True, 'category': 'Getting Started'},
+        {'id': 'first_medication', 'name': 'Medicine Cabinet', 'description': 'Added your first medication',
+         'icon': '💊', 'earned': len(st.session_state.medications) >= 1, 'category': 'Medications'},
+        {'id': 'med_master', 'name': 'Med Master', 'description': 'Added 5 or more medications',
+         'icon': '🎓', 'earned': len(st.session_state.medications) >= 5, 'category': 'Medications'},
+        {'id': 'perfect_day', 'name': 'Perfect Day', 'description': 'Took all medications on time today',
+         'icon': '⭐', 'earned': all(m.get('taken_today', False) for m in st.session_state.medications) if st.session_state.medications else False,
+         'category': 'Adherence'},
+        {'id': 'health_tracker', 'name': 'Health Tracker', 'description': 'Scheduled 3 doctor appointments',
+         'icon': '📅', 'earned': len(st.session_state.appointments) >= 3, 'category': 'Appointments'},
+        {'id': 'appointment_keeper', 'name': 'Appointment Keeper', 'description': 'Scheduled your first appointment',
+         'icon': '👨‍⚕️', 'earned': len(st.session_state.appointments) >= 1, 'category': 'Appointments'},
+        {'id': 'week_warrior', 'name': 'Week Warrior', 'description': 'Maintained 7 day adherence streak',
+         'icon': '🔥', 'earned': False, 'category': 'Streaks'},
+        {'id': 'side_effect_reporter', 'name': 'Health Advocate', 'description': 'Reported a side effect',
+         'icon': '⚠️', 'earned': len(st.session_state.side_effects) >= 1, 'category': 'Health Monitoring'},
+        {'id': 'turtle_friend', 'name': 'Turtle\'s Best Friend', 'description': 'Made your turtle companion happy',
+         'icon': '🐢', 'earned': st.session_state.turtle_mood in ['happy', 'excited', 'celebrating'], 'category': 'Fun'},
+        {'id': 'consistency_king', 'name': 'Consistency King/Queen', 'description': 'Achieve 100% adherence rate',
+         'icon': '👑', 'earned': all(m.get('taken_today', False) for m in st.session_state.medications) and len(st.session_state.medications) > 0,
+         'category': 'Adherence'}
+    ]
+    
+    earned_count = sum(1 for a in achievements_list if a['earned'])
+    total_count = len(achievements_list)
+    progress_pct = (earned_count / total_count * 100) if total_count > 0 else 0
+    
+    st.markdown(f"""
+    <div style='text-align: center; padding: 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                border-radius: 16px; color: white; margin-bottom: 24px;'>
+        <h2 style='color: white; margin: 0;'>🎯 {earned_count} / {total_count} Achievements Unlocked</h2>
+        <p style='font-size: 18px; margin-top: 8px;'>{progress_pct:.0f}% Complete</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.progress(progress_pct / 100)
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    cols = st.columns(3)
+    
+    for i, achievement in enumerate(achievements_list):
+        col = cols[i % 3]
+        
+        with col:
+            if achievement['earned']:
+                opacity = "1.0"
+                border_color = "#10b981"
+                bg_gradient = "linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)"
+                status = '<span style="color: #10b981; font-weight: 700;">✅ Earned</span>'
+            else:
+                opacity = "0.6"
+                border_color = "#e5e7eb"
+                bg_gradient = "linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)"
+                status = '<span style="color: #6b7280; font-weight: 600;">🔒 Locked</span>'
+            
+            st.markdown(f"""
+            <div style='text-align: center; padding: 20px; background: {bg_gradient}; 
+                        border-radius: 16px; margin: 10px 0; opacity: {opacity}; 
+                        border: 3px solid {border_color}; transition: all 0.3s ease;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.1);'>
+                <div style='font-size: 56px; margin-bottom: 12px;'>{achievement['icon']}</div>
+                <h3 style='margin: 8px 0; color: #1f2937;'>{achievement['name']}</h3>
+                <p style='font-size: 14px; color: #6b7280; margin: 8px 0;'>{achievement['description']}</p>
+                <div style='margin-top: 12px;'>{status}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+def reports_tab():
+    """Reports tab content"""
+    st.markdown("<h3 style='color: #ffffff;'>📤 Generate & Download Health Reports</h3>", unsafe_allow_html=True)
+    
+    report_type = st.selectbox("Report Type", [
+        "Complete Health Report",
+        "Medication History",
+        "Adherence Report",
+        "Appointment Summary",
+        "Side Effects Log",
+        "Monthly Summary"
+    ])
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        start_date = st.date_input("Start Date", value=date.today() - timedelta(days=30))
+    with col2:
+        end_date = st.date_input("End Date", value=date.today())
+    
+    report_format = st.radio("Format", ["Text", "CSV", "Detailed", "PDF"], horizontal=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    if st.button("📄 Generate Report", use_container_width=True):
+        profile = st.session_state.user_profile
+        
+        if report_format == "PDF":
+            report_data = {
+                'profile': profile,
+                'medications': st.session_state.medications,
+                'appointments': st.session_state.appointments,
+                'side_effects': st.session_state.side_effects,
+                'adherence_history': st.session_state.get('adherence_history', []),
+                'start_date': start_date.strftime("%Y-%m-%d"),
+                'end_date': end_date.strftime("%Y-%m-%d")
+            }
+            pdf_content = generate_pdf_report(report_data, report_type)
+            
+            st.success("PDF report generated successfully!")
+            
+            st.download_button(
+                label="⬇️ Download PDF Report",
+                data=pdf_content,
+                file_name=f"medtimer_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+        else:
+            report_lines = []
+            report_lines.append("=" * 70)
+            report_lines.append("MEDTIMER HEALTH REPORT")
+            report_lines.append("=" * 70)
+            report_lines.append("")
+            report_lines.append(f"Patient: {profile['name']}")
+            report_lines.append(f"Username: {profile['username']}")
+            report_lines.append(f"Age: {profile['age']}")
+            report_lines.append(f"Report Type: {report_type}")
+            report_lines.append(f"Date Range: {start_date} to {end_date}")
+            report_lines.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            report_lines.append("")
+            report_lines.append("=" * 70)
+            report_lines.append("")
+            report_lines.append(f"MEDICATIONS ({len(st.session_state.medications)})")
+            report_lines.append("-" * 70)
+            report_lines.append("")
+            
+            if report_format == "CSV":
+                report_lines.append("Name,Dosage,Type,Frequency,Time,Status")
+                for med in st.session_state.medications:
+                    status = "Taken" if med.get('taken_today', False) else "Pending"
+                    report_lines.append(f"{med['name']},{med['dosageAmount']},{med['dosageType']},{med['frequency']},{med['time']},{status}")
+            else:
+                for i, med in enumerate(st.session_state.medications, 1):
+                    status = "Taken" if med.get('taken_today', False) else "Pending"
+                    report_lines.append(f"{i}. {med['name']}")
+                    report_lines.append(f"   - Dosage: {med['dosageAmount']}")
+                    report_lines.append(f"   - Type: {med['dosageType'].capitalize()}")
+                    report_lines.append(f"   - Frequency: {med['frequency'].replace('-', ' ').title()}")
+                    report_lines.append(f"   - Time: {med['time']}")
+                    report_lines.append(f"   - Status: {status}")
+                    report_lines.append("")
+            
+            report_lines.append("")
+            report_lines.append(f"APPOINTMENTS ({len(st.session_state.appointments)})")
+            report_lines.append("-" * 70)
+            report_lines.append("")
+            
+            for i, appt in enumerate(st.session_state.appointments, 1):
+                report_lines.append(f"{i}. Dr. {appt['doctor']}")
+                report_lines.append(f"   - Specialty: {appt.get('specialty', 'N/A')}")
+                report_lines.append(f"   - Date: {appt['date']}")
+                report_lines.append(f"   - Time: {appt['time']}")
+                report_lines.append(f"   - Location: {appt.get('location', 'N/A')}")
+                report_lines.append("")
+            
+            report_lines.append("")
+            report_lines.append(f"SIDE EFFECTS LOG ({len(st.session_state.side_effects)})")
+            report_lines.append("-" * 70)
+            report_lines.append("")
+            
+            for i, effect in enumerate(st.session_state.side_effects, 1):
+                report_lines.append(f"{i}. {effect['medication']} - {effect['severity']}")
+                report_lines.append(f"   - Type: {effect.get('type', 'N/A')}")
+                report_lines.append(f"   - Date: {effect['date']}")
+                report_lines.append(f"   - Description: {effect['description']}")
+                report_lines.append("")
+            
+            report_lines.append("")
+            report_lines.append("=" * 70)
+            report_lines.append("End of Report")
+            report_lines.append("Generated by MedTimer - Your Medication Management Companion")
+            report_lines.append("=" * 70)
+            
+            report = "\n".join(report_lines)
+            
+            st.text_area("Preview", report, height=300, key="report_preview")
+            
+            file_extension = "txt" if report_format != "CSV" else "csv"
+            filename = f"medtimer_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{file_extension}"
+            
+            st.download_button(
+                label="⬇️ Download Report",
+                data=report,
+                file_name=filename,
+                mime="text/plain" if report_format != "CSV" else "text/csv",
+                use_container_width=True
+            )
+            
+            st.success("Report generated successfully!")
+
+def patient_dashboard_page():
+    """Main patient dashboard with tabs"""
+    if not st.session_state.user_profile:
+        st.session_state.page = 'patient_login'
+        st.rerun()
+        return
+    
+    age = st.session_state.user_profile.get('age', 25)
+    age_category = get_age_category(age)
+    greeting = get_time_of_day()
+    
+    st.markdown(inject_custom_css(age_category), unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([2, 4, 2])
+    
+    with col1:
+        st.markdown(f"<h2 style='color: #ffffff;'>👋 {greeting}, {st.session_state.user_profile['name']}</h2>", unsafe_allow_html=True)
+    
+    with col2:
+        mascot_img = get_mascot_image(st.session_state.turtle_mood)
+        st.markdown(
+            f"""
+            <div class="turtle-container" style="text-align:center;">
+                <div style="font-size: 120px;">{mascot_img}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    with col3:
+        if st.button("🚪 Logout", use_container_width=True):
+            save_user_data()
+            clear_session_data()
+            st.session_state.page = 'account_type_selection'
+            st.rerun()
+    
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+        "📊 Dashboard", "💊 Medications", "👨‍⚕️ Appointments",
+        "⚠️ Side Effects", "🏆 Achievements", "📥 Reports", "📈 Analytics"
+    ])
+    
+    with tab1:
+        dashboard_overview_tab(age_category)
+    
+    with tab2:
+        medications_tab()
+    
+    with tab3:
+        appointments_tab()
+    
+    with tab4:
+        side_effects_tab()
+    
+    with tab5:
+        achievements_tab()
+    
+    with tab6:
+        reports_tab()
+    
+    with tab7:
+        analytics_tab(age_category)
+
+def caregiver_dashboard_page():
+    """Main caregiver dashboard"""
+    if not st.session_state.user_profile:
+        st.session_state.page = 'caregiver_login'
+        st.rerun()
+        return
+    
+    col1, col2 = st.columns([4, 1])
+    
+    with col1:
+        st.markdown(f"<h1 style='color: #ffffff;'>🤝 Caregiver Dashboard - {st.session_state.user_profile['name']}</h1>", unsafe_allow_html=True)
+    
+    with col2:
+        if st.button("🚪 Logout", use_container_width=True):
+            save_user_data()
+            clear_session_data()
+            st.session_state.page = 'account_type_selection'
+            st.rerun()
+    
+    tab1, tab2, tab3, tab4 = st.tabs(["👥 My Patients", "📊 Overview", "🔗 Connect", "⚙️ Settings"])
+    
+    with tab1:
+        if 'connected_patients' not in st.session_state:
+            st.session_state.connected_patients = []
+        
+        if st.session_state.connected_patients:
+            for patient in st.session_state.connected_patients:
+                st.markdown("<div class='medication-card' style='border-left: 4px solid #10b981;'>", unsafe_allow_html=True)
+                
+                col1, col2, col3 = st.columns([3, 2, 1])
+                
+                with col1:
+                    st.markdown(f"### 👤 {patient['name']}")
+                    st.markdown(f"**Age:** {patient['age']}")
+                    st.markdown(f"**Access Code:** {patient['access_code']}")
+                    st.markdown(f"**Last Contact:** {patient.get('last_contact', 'N/A')}")
+                
+                with col2:
+                    st.metric("Medications", patient.get('medications', 0))
+                    st.metric("Adherence", f"{patient.get('adherence', 0)}%")
+                
+                with col3:
+                    if st.button("🗑️ Disconnect", key=f"disconnect_patient_{patient['id']}", use_container_width=True):
+                        st.session_state.connected_patients = [p for p in st.session_state.connected_patients if p['id'] != patient['id']]
+                        save_user_data()
+                        st.rerun()
+                
+                st.markdown("</div>", unsafe_allow_html=True)
+                st.markdown("<br>", unsafe_allow_html=True)
+        else:
+            st.info("You haven't connected to any patients yet. Use the Connect tab to link with a patient using their access code.")
+            
+            if st.button("➕ Add Demo Patient", use_container_width=True):
+                demo_patient = {
+                    'id': 1,
+                    'name': 'Demo Patient',
+                    'age': 65,
+                    'access_code': '123456',
+                    'medications': 5,
+                    'adherence': 85,
+                    'last_contact': 'Today'
+                }
+                st.session_state.connected_patients.append(demo_patient)
+                save_user_data()
+                st.rerun()
+    
+    with tab2:
+        total_patients = len(st.session_state.connected_patients)
+        total_medications = sum(p.get('medications', 0) for p in st.session_state.connected_patients)
+        avg_adherence = sum(p.get('adherence', 0) for p in st.session_state.connected_patients) / total_patients if total_patients > 0 else 0
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.markdown(f"""
+            <div class='stat-card'>
+                <div class='stat-number'>{total_patients}</div>
+                <div class='stat-label'>Patients</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown(f"""
+            <div class='stat-card'>
+                <div class='stat-number'>{total_medications}</div>
+                <div class='stat-label'>Total Medications</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col3:
+            st.markdown(f"""
+            <div class='stat-card'>
+                <div class='stat-number'>{avg_adherence:.0f}%</div>
+                <div class='stat-label'>Avg Adherence</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col4:
+            st.markdown("""
+            <div class='stat-card'>
+                <div class='stat-number'>0</div>
+                <div class='stat-label'>Alerts</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        if total_patients > 0:
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.info("Connect to patients to see detailed overview statistics.")
+        else:
+            st.info("Connect to patients to see overview statistics.")
+    
+    with tab3:
+        st.info("Ask your patient for their 6-digit access code to connect and monitor their medication adherence.")
+        
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            patient_code = st.text_input("Patient Access Code", max_chars=6, key="patient_connect_code")
+        
+        with col2:
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("🔗 Connect", use_container_width=True):
+                if patient_code and len(patient_code) == 6:
+                    st.success(f"Successfully connected to patient with code: {patient_code}")
+                    st.info("In a full implementation, this would fetch and link patient data.")
+                else:
+                    st.warning("Please enter a valid 6-digit code")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        if 'caregiver_code' not in st.session_state:
+            st.session_state.caregiver_code = generate_patient_code()
+        
+        st.code(st.session_state.caregiver_code, language=None)
+        st.caption("Share this code with patients who want to connect with you.")
+    
+    with tab4:
+        profile = st.session_state.user_profile
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown(f"**Name:** {profile['name']}")
+            st.markdown(f"**Username:** {profile['username']}")
+            st.markdown(f"**Role:** {profile.get('relationship', 'N/A')}")
+        
+        with col2:
+            st.markdown(f"**Experience:** {profile.get('experience', 'N/A')}")
+            st.markdown(f"**Phone:** {profile.get('phone', 'Not provided')}")
+        
+        if profile.get('notes'):
+            st.markdown(f"**Notes:** {profile['notes']}")
+
+def main():
+    """Main application router"""
+    init_database()
+    initialize_session_state()
+    
+    age_category = 'adult'
+    if st.session_state.user_profile:
+        age = st.session_state.user_profile.get('age', 25)
+        age_category = get_age_category(age)
+    
+    st.markdown(inject_custom_css(age_category), unsafe_allow_html=True)
+    
+    page = st.session_state.page
+    
+    if page == 'account_type_selection':
+        account_type_selection_page()
+    elif page == 'patient_login':
+        patient_login_page()
+    elif page == 'patient_signup':
+        patient_signup_page()
+    elif page == 'patient_dashboard':
+        patient_dashboard_page()
+    elif page == 'caregiver_login':
+        caregiver_login_page()
+    elif page == 'caregiver_signup':
+        caregiver_signup_page()
+    elif page == 'caregiver_dashboard':
+        caregiver_dashboard_page()
+    else:
+        account_type_selection_page()
+
+if __name__ == "__main__":
+    main()
+
 
 def side_effects_tab():
     """Side effects tab content"""
@@ -3243,4 +3858,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
