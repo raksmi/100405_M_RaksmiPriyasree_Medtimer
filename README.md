@@ -7,7 +7,6 @@
 
 -   [🎯 Overview](#-overview)
 -   [✨ Features](#-features)
--   [🚀 Installation](#-installation)
 -   [📖 Usage](#-usage)
 -   [👥 User Types](#-user-types)
 -   [🎨 Customization](#-customization)
