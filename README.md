@@ -568,6 +568,75 @@ Adherence % = (Total Doses Taken / Total Doses Scheduled) × 100
 
 * * *
 
+🔗 Integration Details
+📌 Database Integration (SQLite)
+
+Auto-initializes on first run
+
+Tables include:
+
+users
+
+medications
+
+appointments
+
+side_effects
+
+medication_history
+
+adherence_history
+
+connected_patients
+
+All user data is locally stored and persistent
+
+📊 Visualization Integration
+
+Plotly charts used for:
+
+Adherence trends
+
+Medication distribution
+
+Daily schedule
+
+Side-effect severity
+
+Charts dynamically update based on user data
+
+🔔 Reminder & Notification Integration
+
+HTML-based audio reminders
+
+Triggered when medication time is within ±5 minutes
+
+Optional sound toggle for accessibility
+
+📄 Report Generation Integration
+
+PDF reports generated using ReportLab
+
+Includes:
+
+Patient profile
+
+Medication list
+
+Appointments
+
+Side effects
+
+Downloadable directly from the app
+
+🔐 Authentication Integration
+
+Username + Password login
+
+Optional email-based demo verification
+
+Caregiver ↔ Patient linking using 6-digit access codes
+
 ## 🎯 Credits
 Created by: M.Raksmi Priyasree (ID: 1000405)
 
