@@ -658,7 +658,7 @@ Mentor: Syed Ali Beema.S
 
 School: Jain Vidyalaya IB world school, Madurai
 
-## NOTE: App's timing is different according to the streamlit's configuration
+**NOTE: App's timing is different according to the streamlit's configuration**
 
 
 [⬆ Back to Top](#-medtimer---advanced-medication-management-system)
