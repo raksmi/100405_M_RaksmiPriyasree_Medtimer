@@ -645,6 +645,25 @@ Caregiver ↔ Patient linking using 6-digit access codes
 
 Tested by: Friend
 
+I tested MedTimer by actually using it like a real user. I checked sign-up and login for both patient and caregiver accounts, added medications with different timings, marked them as taken/missed, and made sure reminders triggered properly.
+
+
+I tested appointments, side-effects reporting, adherence tracking, and undo actions to see if data updates correctly. I also refreshed and re-logged in to confirm that everything is saved in the database properly.
+
+
+The dashboard stats, charts, and reports were tested with both data and no-data cases, and everything displayed correctly without crashing. A few small bugs showed up during testing (like refresh issues), but they were fixed.
+
+
+Overall, the app works smoothly, features behave as expected, and it feels reliable for real use.
+
+
+**Suggestions:**
+
+
+A short onboarding/help screen for first-time users would be helpful.
+
+Syncing data across devices or adding cloud backup could be a nice upgrade.
+
 
 
 
