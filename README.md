@@ -667,7 +667,6 @@ Syncing data across devices or adding cloud backup could be a nice upgrade.
 
 
 
-
 ## 🎯 Credits
 Created by: M.Raksmi Priyasree (ID: 1000405)
 
