@@ -105,7 +105,6 @@ Photos and Flow link: https://drive.google.com/drive/folders/1w-nhn8XTzIXfWgVUTa
 #### 🗑️ **Delete Medications**
 
 -   Remove medications from your list
--   Confirmation before deletion
 -   Preserves history
 
 #### ✓ **Take Medication**
