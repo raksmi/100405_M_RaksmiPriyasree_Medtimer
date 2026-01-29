@@ -641,6 +641,14 @@ Optional email-based demo verification
 
 Caregiver ↔ Patient linking using 6-digit access codes
 
+## Testing:
+
+Tested by: Friend
+
+
+
+
+
 ## 🎯 Credits
 Created by: M.Raksmi Priyasree (ID: 1000405)
 
@@ -650,8 +658,7 @@ Mentor: Syed Ali Beema.S
 
 School: Jain Vidyalaya IB world school, Madurai
 
-NOTE: App's timing is different according to the streamlit's configuration
+## NOTE: App's timing is different according to the streamlit's configuration
 
-**Made with ❤️ for better health management**
 
 [⬆ Back to Top](#-medtimer---advanced-medication-management-system)
